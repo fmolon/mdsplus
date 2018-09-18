@@ -359,10 +359,13 @@ public class DecompileTree
                             node.appendChild(docSon);
                             recDecompile(sons[i], docSon, false, isFull);
                         }
+
                         NidData [] members;
                         try {
                             members = mdsTree.getMembers(nid, 0);
+		            if(members == null) members = new NidData[0];
                         }catch(Exception exc){members = new NidData[0];}
+
                         for(int i = 0; i < members.length; i++)
                         {
                             Element docMember;
