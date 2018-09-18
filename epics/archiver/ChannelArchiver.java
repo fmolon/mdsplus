@@ -21,6 +21,7 @@ public class ChannelArchiver
     static Hashtable monitorInfo = new Hashtable();
     static Hashtable scanInfo = new Hashtable();
     static Hashtable bufferH = new Hashtable(); //Indexed by path name
+    static Vector<DataMonitor> dataMonitors = new Vector<DataMonitor>();
     static Data DBR2Data(DBR dbr) throws Exception
     {
         Data data = null;
@@ -366,11 +367,19 @@ public class ChannelArchiver
         public void run()
         {
             System.err.println("Start TreeHandler on " + newShot );
-            //while(true)
-            while(!terminate)
+            while(true)
+            //while(!terminate)
             {
+
+                if ( terminate && queue.isEmpty() )
+                {
+                     System.err.println("Stop TreeHandler on " + newShot );
+                     break;
+                }
+
             	if( newShot > 0 && ( newShot != currShot ) || ( currSize > switchSize ) )
             	{
+
 		    	if(currSize > switchSize)
 		    	{
 	 		    if(debug) System.out.println("REACHED FILE SIZE LIMIT: " + currSize + " " + switchSize);
@@ -407,7 +416,7 @@ public class ChannelArchiver
 			    currSize = 0;
 			    sizeChecker = new SizeChecker(tree);
 			    (new Thread(sizeChecker)).start();
-			}catch(Exception exc){System.err.println("Error creating pulse: " + exc);}
+			} catch(Exception exc){System.err.println("Error creating pulse: " + exc);}
 		}
 
 
@@ -429,9 +438,12 @@ public class ChannelArchiver
 		   }
 		}
 	    	try {
+                   //System.out.println(" Write data on Node " + nodeName );
 		   if(descr.getDim() > 1)
+		   {
 		       node.makeTimestampedSegment(descr.getVals(), descr.getTimes());
-		   else
+		   }
+                   else
 		   {
 		       node.putRow(descr.getVal(), descr.getTimes()[0]);
 		   }
@@ -577,15 +589,28 @@ public class ChannelArchiver
 		    while(!terminated)
 		    {
 			try {
+		   		System.out.println("Waiting for command....");
 				Socket connectionSocket = shotServerSocket.accept();
 	   			BufferedReader inFromClient = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
                                 StringTokenizer st = new StringTokenizer(inFromClient.readLine());
-	   			shot = Integer.parseInt( st.nextToken() );
-                                int duration = Integer.parseInt( st.nextToken() );
-	   			System.out.println("Received shot     : " + shot);
-	   			System.out.println("Received duration : " + duration);
-				TreeManager.this.setNewShot(shot);
-                                TreeManager.this.startPulseDuration(duration);
+                                java.lang.String command = st.nextToken();
+		   		System.out.println("Received COMMAND     : " + command);
+				if ( command.equals("start"))
+				{
+		   			shot = Integer.parseInt( st.nextToken() );
+		                        int duration = Integer.parseInt( st.nextToken() );
+		   			System.out.println("Received shot     : " + shot);
+		   			System.out.println("Received duration : " + duration);
+                                        System.out.println("Start Acquisition");
+					TreeManager.this.setNewShot(shot);
+		                        TreeManager.this.startPulseDuration(duration);
+				} else {
+					if( command.equals("stop") )
+					{
+						TreeManager.this.setNewShot(-1);	
+					}
+				}
+				
 				
 			}catch(NumberFormatException exc){
 			    System.err.println("Cannot get shot number : " + exc); 
@@ -621,7 +646,8 @@ public class ChannelArchiver
 
 	public void startPulseDuration(int duration)
 	{
-	    (new Thread(new ShotPulseDuration(duration))).start();	
+	    if( duration > 0 )
+	    	(new Thread(new ShotPulseDuration(duration))).start();	
         }
 
 	public void startShotUpdater(int port)
@@ -630,9 +656,46 @@ public class ChannelArchiver
 	    (new Thread(shotPulseUpdater)).start();
 	}
 
+	public void pvsSnap()
+	{
+	    for(int i = 0; i < dataMonitors.size(); i++)
+	        dataMonitors.elementAt(i).refresh();
+	}
+
+
         public void setNewShot(int shot)
         {
+
+            if ( threadTreeH != null && threadTreeH.isAlive() && getCurrShot() == shot )
+                return;
+
+	    if( shot == -1 || getCurrShot() > 0 )
+	    {
+                 System.out.println("SNAP last PV values in shot " + getCurrShot());
+                 pvsSnap();
+            }
+
+            if ( threadTreeH != null && threadTreeH.isAlive() && getCurrShot() != shot )
+	    {
+
+	        treeH.setNewShot(-1);
+                try {
+		        System.out.println("threadTreeH Thread state " + threadTreeH.getState() );
+		        System.err.println("threadTreeH Stop Thread");
+		        threadTreeH.join();
+		        System.out.println("threadTreeH Thread state " + threadTreeH.getState() );
+                } 
+                catch(Exception exc)
+                {
+                    System.err.println("threadTreeH " + exc);
+                }                
+
+                threadTreeH = null;
+                nodeHash.clear();
+            }
+
 	    treeH.setNewShot(shot);
+/*
             if(threadTreeH != null && threadTreeH.isAlive())
             {
                 try {
@@ -646,12 +709,14 @@ public class ChannelArchiver
                     System.err.println("threadTreeH " + exc);
                 }                
             } 
-
+*/
             if( shot > 0  )
             {
                 System.err.println("setNewShot Start Thread");
 		threadTreeH = new Thread(treeH);
                 threadTreeH.start();
+                System.out.println("SNAP first PV values");
+                pvsSnap();
             }
 	    else
             {
@@ -781,6 +846,7 @@ public class ChannelArchiver
             this.treeManager = treeManager;
             this.treeNodeName = treeNodeName;
 	    this.segmentSize = segmentSize;
+
             this.severityNodeName = severityNodeName;
             saveTree = true;
             this.ignFuture = ignFuture;
@@ -832,6 +898,9 @@ public class ChannelArchiver
 		         treeManager.putRow(severityNodeName, new Int8((byte)severity), time, segmentSize);
 	        	 prevSeverity = severity;
                     }
+                    currData = data;
+                    currTime = time;
+		    currSeverity = severity;
                 }
                 else
                 {
@@ -850,6 +919,26 @@ public class ChannelArchiver
         {
             return new DataAndTime(currData, currTime);
         }
+
+	public synchronized void refresh()
+	{
+	    try {                                
+                long POSIX_TIME_AT_EPICS_EPOCH = 631152000000000000L;//ns from 00:00 1 January 1990 EPICS epoch
+		Date now = new Date();      
+		long nowTime1 = (now.getTime() * 1000000L) - POSIX_TIME_AT_EPICS_EPOCH;
+		long nowTime = (System.currentTimeMillis()*1000000L) - POSIX_TIME_AT_EPICS_EPOCH;
+
+
+                //System.err.println("Writing SNAP VALUE " + treeNodeName + " " + currTime + " " + nowTime + " " + currData);
+            	treeManager.putRow(treeNodeName, currData, nowTime, segmentSize);
+            }
+            catch(Exception exc)
+            {
+                exc.printStackTrace();
+                System.err.println("Error writing sample: " + exc);
+            }	
+	}
+
 	public synchronized int getSeverity() { return currSeverity;}
         
     }//End static class 
@@ -969,7 +1058,7 @@ public class ChannelArchiver
                            else
                                 System.out.print(" TIMEOUT on data  " + treeNodeName + "Used previous value");					
 			   data = prevData;
-                           //time = prevTime + period * 1000000;//epics ime in micro seconds
+                           //time = prevTime + period * 1000000;//epics time in nano seconds
                            time = (System.currentTimeMillis() - 631152000000l ) * 1000000l;
                         }
                         catch(Exception exc)
@@ -989,7 +1078,7 @@ public class ChannelArchiver
                     }
                     if(time <= prevTime)  //A previous sample has been received
 		    {
-			time = prevTime + period * 1000000;//epics time in micro seconds
+			time = prevTime + period * 1000000;//epics time in nano seconds
                         //System.out.println("---PREVIOUS SAMPLE!!! Time: "+time + " Previous time: " + prevTime);
                         //continue;
                     }
@@ -1068,6 +1157,12 @@ public class ChannelArchiver
 	    System.out.println("INTERNAL ERROR in getBufferSize(): " + exc);
 	}
 	return SEGMENT_SIZE;
+    }
+
+    static void refresh()
+    {
+	for(int i = 0; i < dataMonitors.size(); i++)
+	    dataMonitors.elementAt(i).refresh();
     }
 
     public static void main(java.lang.String[] args)
@@ -1220,13 +1315,15 @@ public class ChannelArchiver
 			if(debug) System.out.println("Monitoring channel started. Segment size: "+segmentSize);
                         if(scanMode.equals("MONITOR"))
                         {
+			    DataMonitor newDataMonitor;
                             if(valDbr.isENUM() || valDbr.isCTRL() || valDbr.isINT())
                                 valChan.addMonitor(DBRType.TIME_INT, 1, Monitor.VALUE, 
-                               	new DataMonitor(treeManager, valNode.getFullPath(), segmentSize, severityNode.getFullPath(), ignFuture));
+                               	newDataMonitor = new DataMonitor(treeManager, valNode.getFullPath(), segmentSize, severityNode.getFullPath(), ignFuture));
                             else
                                 valChan.addMonitor(DBRType.TIME_DOUBLE, 1, Monitor.VALUE, 
-                                new DataMonitor(treeManager, valNode.getFullPath(), segmentSize, severityNode.getFullPath(), ignFuture));
+                                newDataMonitor = new DataMonitor(treeManager, valNode.getFullPath(), segmentSize, severityNode.getFullPath(), ignFuture));
                             ctxt.pendIO(5.);
+			    dataMonitors.addElement(newDataMonitor);
                         }
                         else //Periodic
                         {
