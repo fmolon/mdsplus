@@ -242,10 +242,10 @@ class SaveItem {
 	    Data *endIdx;
             //In Transient Record acquisition mode must set
             //the last segment with the correct size
-	    if( sampleToRead > 0 && sampleToRead < segmentSize )
-	        endIdx = new Int32(counter + sampleToRead - 1);
-	    else
-	        endIdx = new Int32(counter + segmentSize);
+	    if( sampleToRead > 0 && sampleToRead  < segmentSize )
+	        segmentSize = sampleToRead;
+
+	    endIdx = new Int32(counter + segmentSize - 1);
                    
 	    Data *startTime;
 	    Data *endTime;
@@ -259,7 +259,7 @@ class SaveItem {
 	    	endTime = compileWithArgs("begin_of($)+slope_of($)*$",(Tree *)treePtr, 3, clockNode,  clockNode,endIdx);
 
 	  	//dim = compileWithArgs("$", (Tree *)treePtr, 1, clockNode);
-	    	dim = compileWithArgs("build_range(begin_of($)+slope_of($)*$, begin_of($)+slope_of($)*$, slope_of($))", 
+	    	dim = compileWithArgs("build_range(begin_of($)+slope_of($)*$, begin_of($)+slope_of($)*($), slope_of($))", 
 	       				(Tree *)treePtr, 7, clockNode, clockNode, startIdx, clockNode, clockNode, endIdx, clockNode);
 	    }
 	    else
@@ -267,7 +267,7 @@ class SaveItem {
 	    	Data *timeAtIdx0 = new Float32(timeIdx0);
 	    	startTime = compileWithArgs("$+slope_of($)*$",(Tree *)treePtr, 3, timeAtIdx0, clockNode, startIdx);
 	    	endTime = compileWithArgs("$+slope_of($)*$",(Tree *)treePtr, 3,timeAtIdx0,  clockNode, endIdx);
-	    	dim = compileWithArgs("build_range($+slope_of($)*$, $+slope_of($)*$, slope_of($))", (Tree *)treePtr, 
+	    	dim = compileWithArgs("build_range($+slope_of($)*$, $+slope_of($)*($), slope_of($))", (Tree *)treePtr, 
 		                     7, timeAtIdx0, clockNode, startIdx, timeAtIdx0, clockNode, endIdx, clockNode);
 	    }
 
@@ -577,18 +577,16 @@ int readAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int segmentS
                 //printf("readSamples %d counters[%d] = %d readSamples %d\n", readSamples, chan, counters[chan], readSamples );
                 if( readSamples != 0 )
                 {
-		    		//if( numSamples > 0 ) readSamples = 	counters[chan] + readSamples < numSamples ? readSamples : numSamples - counters[chan];
-		            if( numSamples > 0 ) 
+		    //if( numSamples > 0 ) readSamples = 	counters[chan] + readSamples < numSamples ? readSamples : numSamples - counters[chan];
+		    if( numSamples > 0 ) 
                     {
                         if ( counters[chan] + readSamples > numSamples ) 
                             readSamples = numSamples - counters[chan];
-                        sampleToRead = numSamples - counters[chan];
+                        sampleToRead = numSamples - counters[chan] + 1;//Number od sample to read from Nstart to Nend is (Nend - Nstart + 1)
                     }
           	    
-
                     //printf("readSamples %d counters[%d] = %d readSamples %d\n", readSamples, chan, counters[chan], readSamples );
-     
-//                  saveList->addItem(buffer, bufSize, segmentSize, counters[chan], dataNid[chan], clockNid, treePtr);
+		    //saveList->addItem(buffer, bufSize, segmentSize, counters[chan], dataNid[chan], clockNid, treePtr);
                     saveList->addItem(buffer, readSamples, sampleToRead, FLOAT, segmentSize, counters[chan], dataNid[chan], clockNid, NAN, treePtr);
                     counters[chan] += readSamples;
                 }
@@ -751,7 +749,7 @@ int pxi6259_readAndSaveAllChannels_OLD(int nChan, void *chanFdPtr, int bufSize, 
                     {
                         if ( counters[chan] + readSamples > numSamples ) 
                             readSamples = numSamples - counters[chan];
-                        sampleToRead = numSamples - counters[chan];
+                        sampleToRead = numSamples - counters[chan] + 1;
                     }
           	    
 
@@ -934,6 +932,10 @@ int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int s
     // Start main acquisition loop
     while( !(*(int*)stopAcq) )
     {
+
+        int testCount = 0;   
+
+
         //Check if there are samples to skip common for each channel.
         //sampleToSkip is an argument of the function.
         //ATTENTION : to check with external trigger
@@ -961,7 +963,6 @@ int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int s
                 continue;
             }
 
-            
             sampleToRead = numSamples - readChanSmp[chan]; // Compute the sample to read for the current channel
             if( sampleToRead < bufSize )
                 currDataToRead = sampleToRead;
@@ -971,16 +972,17 @@ int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int s
             //read data from device based on acquisition mode converted 1 raw data 0
             //Functions waiting for data or timeout
             if( saveConv )
-                //number fo data to red is expresse in aamples
+                //number fo data to red is expresse in samples
                 currReadSamples = xseries_read_ai(chanFd[chan], &buffers_f[chan][bufReadChanSmp[chan]], (currDataToRead - bufReadChanSmp[chan]) );
             else
 		//number of sample to read must be in byte
-                currReadSamples = read(chanFd[chan], &buffers_s[chan][bufReadChanSmp[chan]], ( currDataToRead - bufReadChanSmp[chan] ) << 1 );
+                currReadSamples = read(chanFd[chan], &buffers_s[chan][bufReadChanSmp[chan]], (currDataToRead - bufReadChanSmp[chan]) << 1 );
+
 
             readCalls[chan]++;
 
-            //if( chan == 0 )
-            //printf("bufReadChanSmp[%d] = %d  currDataToRead %d Request data %d read data %d \n",chan, bufReadChanSmp[chan] , currDataToRead, currDataToRead - bufReadChanSmp[chan], currReadSamples >> 1);
+if( chan == 0 && (testCount % 1000000) == 0 )
+printf("[1] bufReadChanSmp[%d] = %d  currDataToRead %d Request data %d read data %d \n",chan, bufReadChanSmp[chan] , 	currDataToRead, currDataToRead - bufReadChanSmp[chan], currReadSamples >> 1);
 
             // Check if no data is available
             if(currReadSamples <=0)
@@ -1017,8 +1019,8 @@ int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int s
             else
                 bufReadChanSmp[chan] += ( currReadSamples >> 1 );                     
 
-            
-//printf("bufReadChanSmp[%d] = %d  currDataToRead %d Request data %d read data %d \n",chan, bufReadChanSmp[chan] , currDataToRead);
+if( chan == 0 && (testCount % 1000000) == 0 )            
+printf("[2] bufReadChanSmp[%d] = %d  currDataToRead %d Request data %d read data %d \n",chan, bufReadChanSmp[chan] , currDataToRead);
 
             //Enqueue data to store in the pulse file
             if( bufReadChanSmp[chan] == currDataToRead )
@@ -1029,8 +1031,10 @@ int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int s
 
                 //Compute the number of samples to complete segment acquisition
                 sampleToRead = numSamples - readChanSmp[chan];
-  
-                //printf("bufReadChanSmp[%d] = %d readChanSmp[%d] = %d readChanSmp[%d] = %d sampleToRead = %d\n", chan, bufReadChanSmp[chan], chan, readChanSmp[chan], chan, readChanSmp[chan], sampleToRead );
+
+
+if( chan == 0 && (testCount % 1000) == 0 )   
+printf("[>>>3] bufReadChanSmp[%d] = %d readChanSmp[%d] = %d readChanSmp[%d] = %d sampleToRead = %d\n", chan, bufReadChanSmp[chan], chan, readChanSmp[chan], chan, readChanSmp[chan], sampleToRead );
     	    
                 if(!skipping)
                 {
@@ -1050,6 +1054,9 @@ int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int s
                 bufReadChanSmp[chan] = 0;    
             }
             chan = (chan + 1) % nChan;
+
+	    testCount++;
+
         }//End Segment acquisition loop for each channel
 
         //Reset variables for skiping samples
@@ -1070,6 +1077,8 @@ int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int s
             break;
 
         numSamples = readChanSmp[0] + segmentSize;
+
+        
         
     }//End main acquisition loop 
 

@@ -2,7 +2,7 @@ ifeq ($(CODAC_ROOT),)
   $(error CODAC_ROOT is not set)
 endif
 
-CC=gcc
+CC=g++
 
 #CFLAGS_DEBUG := -fPIC -Werror -Wall -Wextra -O0 -rdynamic -g -DDEBUG
 CFLAGS_DEBUG := -fPIC -O0  -g -DDEBUG
@@ -15,7 +15,7 @@ CFLAGS_RELEASE := -fPIC  -O3
 LDFLAGS_RELEASE =
 
 CFLAGS =   -fPIC -O0 -g -I${MDSPLUS_DIR}/include -I${CODAC_ROOT}/include 
-LDFLAGS =  -fPIC -O0 -L${MDSPLUS_DIR}/lib -L${CODAC_ROOT}/lib/ -lNiFpga -lpxi6259 -lnixseries -lpthread -lMdsObjectsCppShr 
+LDFLAGS =  -fPIC -O0 -L${MDSPLUS_DIR}/lib -L${CODAC_ROOT}/lib/ -lm -lNiFpga -lpxi6259 -lnixseries -lpthread -lMdsObjectsCppShr 
 
 # Debug builds (make debug)
 
@@ -39,7 +39,7 @@ libNiInterface : $(OBJECTS)
 	$(CC)  -c $(CFLAGS)  $< -o $@
 
 $(BIN):	$(SOURCES_EXE)
-	gcc $(LDFLAGS) -L . -lNiInterface $(CFLAGS)  -o $@ $@.cpp 
+	g++ $(LDFLAGS) -L . -lNiInterface $(CFLAGS)  -o $@ $@.cpp 
 
 
 clean:

@@ -32,7 +32,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 using namespace MDSplus;
 
 
-int caenLibDebug = 0;
+int caenLibDebug = 1;
 
 //////////////////////////////////////////////////////////////
 // Filter Code Definitions
@@ -182,7 +182,14 @@ class SaveItem {
 
   	startTime = compileWithArgs("$[$]+slope_of($)*$",(Tree *)treePtr, 4, triggerNode, segCount, clockNode, startIdx);
  	endTime =   compileWithArgs("$[$]+slope_of($)*$",(Tree *)treePtr, 4, triggerNode, segCount, clockNode, endIdx);
+
+/*
  	dim = compileWithArgs("build_dim(build_window($, $, $[$]), build_slope( slope_of($) ) )", (Tree *)treePtr, 5, startIdx, endIdx, triggerNode, segCount, clockNode);
+*/
+        dim = compileWithArgs("build_range($[$]+slope_of($)*$, $[$]+slope_of($)*($-1), slope_of($))", (Tree *)treePtr, 
+		                     9, triggerNode, segCount, clockNode, startIdx, triggerNode, segCount, clockNode, endIdx, clockNode);
+
+
 
 
         try 
