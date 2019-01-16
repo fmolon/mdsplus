@@ -8,7 +8,7 @@ import MDSplus.*;
 import java.net.*;
 
 /*
-javac -cp ./caj-1.1.5b.jar:./jca-2.3.2.jar:/usr/local/mdsplus/java/classes/mdsobjects.jar ChannelArchiver.java
+javac -cp ./caj-1.1.14.jar:./jca-2.3.6.jar:/usr/local/mdsplus/java/classes/mdsobjects.jar ChannelArchiver.java
 cp *.class /usr/local/mdsplus/epics/archiver/.
 */
 
@@ -18,6 +18,8 @@ public class ChannelArchiver
     static int SEGMENT_SIZE;
     static int MAX_QUEUE_LEN  = 10000;
     static boolean debug = false;
+    static boolean disableAccesPVaux = false;
+
     static Hashtable monitorInfo = new Hashtable();
     static Hashtable scanInfo = new Hashtable();
     static Hashtable bufferH = new Hashtable(); //Indexed by path name
@@ -610,7 +612,7 @@ public class ChannelArchiver
 						TreeManager.this.setNewShot(-1);	
 					}
 				}
-				
+				connectionSocket.close();
 				
 			}catch(NumberFormatException exc){
 			    System.err.println("Cannot get shot number : " + exc); 
@@ -1178,11 +1180,18 @@ public class ChannelArchiver
 	TreeManager treeManager = null;
         int ipPort = 0;
 
+
+        System.out.println("Channel Archiver START");
+
 	java.lang.String mdsipAddress = System.getProperty("mdsip");
 	java.lang.String debugTxt = System.getProperty("debug");
 	debug = (debugTxt != null && debugTxt.equals("yes"));
 	java.lang.String createPulseTxt = System.getProperty("create-pulse");
 	createPulse = (createPulseTxt != null && createPulseTxt.equals("yes"));
+
+	java.lang.String disableAccesPVauxTxt = System.getProperty("disable-pv-aux");
+	disableAccesPVaux = (disableAccesPVauxTxt != null && disableAccesPVauxTxt.equals("yes"));
+
 
         //debug = true;
 
@@ -1206,6 +1215,10 @@ public class ChannelArchiver
         try {
             JCALibrary jca = JCALibrary.getInstance();
             Context ctxt = jca.createContext(JCALibrary.CHANNEL_ACCESS_JAVA ) ;
+
+            System.out.println("gov.aps.jca.Context.auto_addr_list " + jca.getProperty("gov.aps.jca.Context.auto_addr_list"));
+            System.out.println("gov.aps.jca.Context.addr_list " + jca.getProperty("gov.aps.jca.Context.addr_list"));
+
             tree = new Tree(experiment, -1);
 	    if(createPulse)
 		tree.createPulse(shot);
@@ -1260,7 +1273,7 @@ public class ChannelArchiver
                         DBR valDbr = valChan.get();
                         ctxt.pendIO(5.);
 			if(debug) System.out.println("Channel created.");
-                        if(!valDbr.isENUM() && !valDbr.isCTRL()&&! valDbr.isINT())
+                        if(!valDbr.isENUM() && !valDbr.isCTRL() && !valDbr.isINT() && !disableAccesPVaux )
                         {
                             //EGU
                             try {
@@ -1274,7 +1287,7 @@ public class ChannelArchiver
                                 eguChan.destroy();
                              }catch(Exception exc)
                              {
-                                 System.err.println("Cannot get EGU for " + recName + ": " + exc);
+                                 System.err.println("Cannot get EGU for " + recName + " Node :"+ nodeName +":EGU : " + exc);
                                  //continue;
                              }
                             //HOPR
@@ -1288,7 +1301,7 @@ public class ChannelArchiver
                                 hoprChan.destroy();
                              }catch(Exception exc)
                              {
-                                 System.err.println("Cannot get HOPR for " + recName + ": " + exc);
+                                 System.err.println("Cannot get HOPR for " + recName+ " Node :"+ nodeName +":HOPR : " + exc);
                              }
                              //LOPR
                             try {
@@ -1301,7 +1314,7 @@ public class ChannelArchiver
                                 loprChan.destroy();
                             }catch(Exception exc)
                             {
-                                System.err.println("Cannot get LOPR for " + recName + ": " + exc);
+                                System.err.println("Cannot get LOPR for " + recName + " Node :"+ nodeName +":LOPR : " + exc);
                             }                        
                         }
                         
@@ -1324,6 +1337,7 @@ public class ChannelArchiver
                                 newDataMonitor = new DataMonitor(treeManager, valNode.getFullPath(), segmentSize, severityNode.getFullPath(), ignFuture));
                             ctxt.pendIO(5.);
 			    dataMonitors.addElement(newDataMonitor);
+			    if(debug) System.out.println("Create monitor :"+ valNode.getFullPath());
                         }
                         else //Periodic
                         {
@@ -1339,9 +1353,11 @@ public class ChannelArchiver
                                 scanInfo.put(valNode.getFullPath(), t);
                             }
                        }
-                    }catch(Exception exc)
+                    }
+                    catch(Exception exc)
                     {
-                        System.err.println("Error handling record "+ recName + ": " + exc);
+                        exc.printStackTrace();
+                        System.err.println("Error handling record "+ recName + " Node :"+ nodeName + ": " + exc);
                     }
                 }
             }
