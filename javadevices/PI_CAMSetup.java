@@ -272,7 +272,7 @@ public class PI_CAMSetup extends DeviceSetup {
         jPanel15.add(deviceField30);
 
         deviceField31.setIdentifier("");
-        deviceField31.setLabelString("Camera Sirial Number:");
+        deviceField31.setLabelString("Camera Serial Number:");
         deviceField31.setOffsetNid(2);
         jPanel15.add(deviceField31);
 
