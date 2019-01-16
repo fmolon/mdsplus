@@ -14,7 +14,7 @@ class PV_WAVE_SETUP(Device):
         {'path':':TRIG_SOURCE', 'type':'numeric','value':0},
         {'path':':PV_TRIG_NAME', 'type':'text'}]
 
-    for i in range(0,2):
+    for i in range(0,8):
         parts.append({'path':'.WAVE_%d'%(i+1), 'type':'structure'})
         parts.append({'path':'.WAVE_%d:NAME'%(i+1), 'type':'text'})
         parts.append({'path':'.WAVE_%d:X'%(i+1), 'type':'numeric'})
@@ -59,53 +59,55 @@ class PV_WAVE_SETUP(Device):
 
         trig.putw(float(trig_data))
 
-        for chan in range(1, 3):
+        for chan in range(1, 8):
 
             #wavex.searchw('NB-SIGV-GISA:PZ%d-WAVEX'%(chan))
             #wavey.searchw('NB-SIGV-GISA:PZ%d-WAVEY'%(chan))
+            
+            if getattr(self, 'wave_%d'%(chan)).isOn() :
 
-            try:
-                pv_wave_x = getattr(self, 'wave_%d_pv_x'%(chan)).data()
-                wavex.searchw(pv_wave_x)
-            except:
-		msg = 'Error on PV waveform %d x variable'%(chan)
-                Data.execute('DevLogErr($1,$2)', self.getNid(), msg)
-                raise mdsExceptions.TclFAILED_ESSENTIAL
+                try:
+                    pv_wave_x = getattr(self, 'wave_%d_pv_x'%(chan)).data()
+                    wavex.searchw(pv_wave_x)
+                except:
+		    msg = 'Error on PV waveform %d x variable'%(chan)
+                    Data.execute('DevLogErr($1,$2)', self.getNid(), msg)
+                    raise mdsExceptions.TclFAILED_ESSENTIAL
 
-
-            try:
-                wavex_data = getattr(self, 'wave_%d_x'%(chan)).data()
-            except:
-		msg = 'Error reading x waveform %d values'%(chan)		
-                Data.execute('DevLogErr($1,$2)', self.getNid(), msg)
-                raise mdsExceptions.TclFAILED_ESSENTIAL
+                try:
+                    wavex_data = getattr(self, 'wave_%d_x'%(chan)).data()
+                except:
+		    msg = 'Error reading x waveform %d values'%(chan)		
+                    Data.execute('DevLogErr($1,$2)', self.getNid(), msg)
+                    raise mdsExceptions.TclFAILED_ESSENTIAL
         
-            #print('wavex_data ', wavex_data)
-
-            try:
-                pv_wave_y = getattr(self, 'wave_%d_pv_y'%(chan)).data()
-                wavey.searchw(pv_wave_y)
-            except:
-		msg = 'Error reading y waveform %d values'%(chan)
-                Data.execute('DevLogErr($1,$2)', self.getNid(), msg)
-                raise mdsExceptions.TclFAILED_ESSENTIAL
+                try:
+                    pv_wave_y = getattr(self, 'wave_%d_pv_y'%(chan)).data()
+                    wavey.searchw(pv_wave_y)
+                except:
+		    msg = 'Error reading y waveform %d values'%(chan)
+                    Data.execute('DevLogErr($1,$2)', self.getNid(), msg)
+                    raise mdsExceptions.TclFAILED_ESSENTIAL
 
 
-            try:
-                wavey_data = getattr(self, 'wave_%d_y'%(chan)).data()
-            except:
-		msg = 'Error reading y waveform %d values'%(chan)		
-                Data.execute('DevLogErr($1,$2)', self.getNid(), msg)
-                raise mdsExceptions.TclFAILED_ESSENTIAL
+                try:
+                    wavey_data = getattr(self, 'wave_%d_y'%(chan)).data()
+                except:
+		    msg = 'Error reading y waveform %d values'%(chan)		
+                    Data.execute('DevLogErr($1,$2)', self.getNid(), msg)
+                    raise mdsExceptions.TclFAILED_ESSENTIAL
 
-            #print('wavey_data ', wavey_data)
+                print('CH %d'%(chan))
+                print('X = ', wavex_data)
+                print('Y = ', wavey_data)
 
-            wavex.putw(wavex_data)
-            wavey.putw(wavey_data)
+                wavex.putw(wavex_data)
+                wavey.putw(wavey_data)
 
         del wavex
         del wavey        
         del trig
+        print '======================================================='
 
         return 1
 
@@ -120,30 +122,32 @@ class PV_WAVE_SETUP(Device):
 
         for chan in range(1, 3):
 
-
-            try:
-                pv_wave_x = getattr(self, 'wave_%d_pv_x'%(chan)).data()
-                wavex.searchw(pv_wave_x)
-            except:
-		msg = 'Error on PV waveform %d x variable'%(chan)
-                Data.execute('DevLogErr($1,$2)', self.getNid(), msg)
-                raise mdsExceptions.TclFAILED_ESSENTIAL
+            if getattr(self, 'wave_%d'%(chan)).isOn() :
+				
+                try:
+                    pv_wave_x = getattr(self, 'wave_%d_pv_x'%(chan)).data()
+                    wavex.searchw(pv_wave_x)
+                except:
+		    msg = 'Error on PV waveform %d x variable'%(chan)
+                    Data.execute('DevLogErr($1,$2)', self.getNid(), msg)
+                    raise mdsExceptions.TclFAILED_ESSENTIAL
 
         
-            try:
-                pv_wave_y = getattr(self, 'wave_%d_pv_y'%(chan)).data()
-                wavey.searchw(pv_wave_y)
-            except:
-		msg = 'Error reading y waveform %d values'%(chan)
-                Data.execute('DevLogErr($1,$2)', self.getNid(), msg)
-                raise mdsExceptions.TclFAILED_ESSENTIAL
+                try:
+                    pv_wave_y = getattr(self, 'wave_%d_pv_y'%(chan)).data()
+                    wavey.searchw(pv_wave_y)
+                except:
+		    msg = 'Error reading y waveform %d values'%(chan)
+                    Data.execute('DevLogErr($1,$2)', self.getNid(), msg)
+                    raise mdsExceptions.TclFAILED_ESSENTIAL
 
-            wavex.putw([0, 0])
-            wavey.putw([0, 0])
+                wavex.putw([0, 0])
+                wavey.putw([0, 0])
 
 
         del wavex
         del wavey        
+        print '========================================================'
 
         return 1
 
