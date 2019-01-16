@@ -160,7 +160,11 @@ REDPYTADCSetup.java \
 JRG_ADC32ASetup.java \
 A3248Setup.java \
 SPIDER_SETUPSetup.java \
-RFX_RPADCSetup.java
+RFX_RPADCSetup.java \
+PI_CAMSetup.java \
+PI_SCT320Setup.java\
+SPECTRO_CFGSetup.java \
+NI6683RECSetup.java 
 
 java_DATA = jDevices.jar
 
