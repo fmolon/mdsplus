@@ -70,19 +70,86 @@ class SPIDER_SETUP(Device):
 
      parts.append({'path':'.SPIDER', 'type':'structure'})
      parts.append({'path':'.SPIDER:T_START_SP', 'type':'numeric', 'value':0})
-     parts.append({'path':'.SPIDER:BON_START', 'type':'numeric', 'value':0})
-     parts.append({'path':'.SPIDER:BON_STOP', 'type':'numeric', 'value':1})
+     parts.append({'path':'.SPIDER:RT_START', 'type':'numeric', 'value':0})
+     parts.append({'path':'.SPIDER:RT_STOP', 'type':'numeric', 'value':1})
      parts.append({'path':'.SPIDER:WREF_START', 'type':'numeric', 'value':0})
      parts.append({'path':'.SPIDER:WREF_STOP', 'type':'numeric', 'value':0})
 
-     parts.append({'path':'.ISEPS:EG_MOD_STATE', 'type':'text', 'value':'DISABLE'})
+     parts.append({'path':'.ISEPS:EG_MOD_STATE', 'type':'text', 'value':'DISABLED'})
      parts.append({'path':'.ISEPS:EG_MOD_FREQ', 'type':'numeric', 'value':1})
      parts.append({'path':'.ISEPS:EG_MOD_DC', 'type':'numeric', 'value':50})
 
-     parts.append({'path':'.ISEPS:RF_MOD_STATE', 'type':'text', 'value':'DISABLE'})
+     parts.append({'path':'.ISEPS:RF_MOD_STATE', 'type':'text', 'value':'DISABLED'})
      parts.append({'path':'.ISEPS:RF_MOD_FREQ', 'type':'numeric','value':1})
      parts.append({'path':'.ISEPS:RF_MOD_DC', 'type':'numeric','value':50})
+
+     parts.append({'path':'.ISEPS:FIL_STATE', 'type':'text', 'value':"OFF"})
+     parts.append({'path':'.ISEPS:FIL_ON_START', 'type':'numeric', 'value':0})
+     parts.append({'path':'.ISEPS:FIL_ON_STOP', 'type':'numeric', 'value':0})
+     parts.append({'path':'.SPIDER:RT_FREQ', 'type':'numeric', 'value':1000})
    
+     parts.append({'path':'.ISEPS:PG_STATE', 'type':'text', 'value':"DISABLED"})
+     parts.append({'path':'.ISEPS:BI_STATE', 'type':'text', 'value':"DISABLED"})
+     parts.append({'path':'.ISEPS:BI_CTRL', 'type':'text', 'value':"VOLTAGE"})
+     parts.append({'path':'.ISEPS:BP_STATE', 'type':'text', 'value':"DISABLED"})
+     parts.append({'path':'.ISEPS:BP_CTRL', 'type':'text', 'value':"VOLTAGE"})
+
+     parts.append({'path':'.AGPS', 'type':'structure'})
+     parts.append({'path':'.AGPS:TRIG_SOURCE', 'type':'numeric'})
+
+     parts.append({'path':'.AGPS:CAEN_FREQ', 'type':'numeric', 'value':2})
+     parts.append({'path':'.AGPS:CAEN_START', 'type':'numeric', 'value':0})
+     parts.append({'path':'.AGPS:CAEN_DURAT', 'type':'numeric', 'value':30})
+     parts.append({'path':'.AGPS:NI6259_FREQ', 'type':'numeric', 'value':10000})
+     parts.append({'path':'.AGPS:NI6259_START', 'type':'numeric', 'value':0})
+     parts.append({'path':'.AGPS:NI6259_DURAT', 'type':'numeric', 'value':60})
+     parts.append({'path':'.AGPS:NI6368_FREQ', 'type':'numeric', 'value':10000})
+     parts.append({'path':'.AGPS:NI6368_START', 'type':'numeric', 'value':0})
+     parts.append({'path':'.AGPS:NI6368_DURAT', 'type':'numeric', 'value':60})
+     parts.append({'path':'.AGPS:BREAK_DEAD', 'type':'numeric', 'value':10})
+     parts.append({'path':'.AGPS:BREAK_REC', 'type':'numeric', 'value':0})
+
+     parts.append({'path':'.AGPS:AG_MOD_STATE', 'type':'text', 'value':'DISABLED'})
+     parts.append({'path':'.AGPS:AG_MOD_FREQ', 'type':'numeric','value':1})
+     parts.append({'path':'.AGPS:AG_MOD_DC', 'type':'numeric','value':50})
+
+     for i in range(0,8):
+           parts.append({'path':'.AGPS.WAVE_%d'%(i+1), 'type':'structure'})
+           parts.append({'path':'.AGPS.WAVE_%d:WAVE'%(i+1), 'type':'signal'})
+           parts.append({'path':'.AGPS.WAVE_%d:MIN_X'%(i+1), 'type':'numeric'})
+           parts.append({'path':'.AGPS.WAVE_%d:MAX_X'%(i+1), 'type':'numeric'})
+           parts.append({'path':'.AGPS.WAVE_%d:MIN_Y'%(i+1), 'type':'numeric'})
+           parts.append({'path':'.AGPS.WAVE_%d:MAX_Y'%(i+1), 'type':'numeric'})
+
+     parts.append({'path':'.AGPS.WAVE_REC', 'type':'structure'})
+     parts.append({'path':'.AGPS.WAVE_REC:WAVE', 'type':'signal'})
+     parts.append({'path':'.AGPS.WAVE_REC:MIN_X', 'type':'numeric'})
+     parts.append({'path':'.AGPS.WAVE_REC:MAX_X', 'type':'numeric'})
+     parts.append({'path':'.AGPS.WAVE_REC:MIN_Y', 'type':'numeric'})
+     parts.append({'path':'.AGPS.WAVE_REC:MAX_Y', 'type':'numeric'})
+
+     parts.append({'path':'.GVS:VC3001_TURNS', 'type':'numeric', 'value':0})
+     parts.append({'path':'.GVS:VC3002_TURNS', 'type':'numeric', 'value':0})
+
+     parts.append({'path':'.SPIDER:TIME_OF_INTE', 'type':'numeric'})
+
+
+     for i in range(8,20):
+           parts.append({'path':'.ISEPS.WAVE_%d'%(i+1), 'type':'structure'})
+           parts.append({'path':'.ISEPS.WAVE_%d:WAVE'%(i+1), 'type':'signal'})
+           parts.append({'path':'.ISEPS.WAVE_%d:MIN_X'%(i+1), 'type':'numeric'})
+           parts.append({'path':'.ISEPS.WAVE_%d:MAX_X'%(i+1), 'type':'numeric'})
+           parts.append({'path':'.ISEPS.WAVE_%d:MIN_Y'%(i+1), 'type':'numeric'})
+           parts.append({'path':'.ISEPS.WAVE_%d:MAX_Y'%(i+1), 'type':'numeric'})
+           parts.append({'path':'.ISEPS.WAVE_%d:LABEL'%(i+1), 'type':'text', 'value':'ISESP wave %d'%(i+1)})
+
+# Add LABEL field to all WAVE signals
+     for i in range(0,8):
+           parts.append({'path':'.ISEPS.WAVE_%d:LABEL'%(i+1), 'type':'text', 'value':'ISESP wave %d'%(i+1)})
+           parts.append({'path':'.GVS.WAVE_%d:LABEL'%(i+1), 'type':'text', 'value':'GVS wave %d'%(i+1)})
+           parts.append({'path':'.AGPS.WAVE_%d:LABEL'%(i+1), 'type':'text', 'value':'AGPS wave %d'%(i+1)})
+ 
+
      del(i)
 
 
