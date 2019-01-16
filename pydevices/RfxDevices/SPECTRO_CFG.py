@@ -147,13 +147,13 @@ class SPECTRO_CFG(Device):
 
             param = 'diameter_str_arr'
             col=sheet['H']
-            diameter_arr = [float(c.value if c.value != None else -1) for c in col[1:len(col):1]]
-            diameter_str_arr = [str( c.value if c.value != None else "") for c in col[1:len(col):1]]
+            diameter_arr = [float(c.value if c.value != None and (type(c.value) == long or type(c.value) == float) else -1) for c in col[1:len(col):1]]
+            diameter_str_arr = [str( c.value if c.value != None and (type(c.value) == long or type(c.value) == float)  else "") for c in col[1:len(col):1]]
 
             param = 'diaphragm_str_arr'
             col=sheet['I']
-            diaphragm_arr = [float(c.value if c.value != None else -1) for c in col[1:len(col):1]]
-            diaphragm_str_arr = [str( c.value if c.value != None else "") for c in col[1:len(col):1]]
+            diaphragm_arr = [float(c.value if c.value != None and (type(c.value) == long or type(c.value) == float)  else -1) for c in col[1:len(col):1]]
+            diaphragm_str_arr = [str( c.value if c.value != None and (type(c.value) == long or type(c.value) == float)  else "") for c in col[1:len(col):1]]
 
             param = 'P0_str_arr'
             matrix=sheet['J2':'L%d'%(self.LOS_NUM+1)]
@@ -170,8 +170,8 @@ class SPECTRO_CFG(Device):
 
             param = 'roi_str_arr'
             col=sheet['P']
-            roi_arr = [int(str( c.value if c.value != None else -1)) for c in col[1:len(col):1]]
-            roi_str_arr = [str( c.value if c.value != None else "") for c in col[1:len(col):1]]
+            roi_arr = [int(str( c.value if c.value != None and (type(c.value) == long or type(c.value) == float)  else -1)) for c in col[1:len(col):1]]
+            roi_str_arr = [str( c.value if c.value != None and (type(c.value) == long or type(c.value) == float)  else "") for c in col[1:len(col):1]]
 
             param = 'spec_arr'
             col=sheet['Q']
