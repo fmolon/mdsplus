@@ -25,7 +25,7 @@
 
 from MDSplus import mdsExceptions, Device, Data, Dimension, Range, Window
 from MDSplus import Int32, Float32, Float32Array, Float64
-from ctypes import CDLL,Structure,c_int,c_uint,c_char,c_byte,c_ubyte,c_float,byref,c_char_p,c_void_p,c_short
+from ctypes import CDLL,Structure,c_int,c_uint,c_char,c_byte,c_ubyte,c_float,byref,c_char_p,c_void_p,c_short,c_ulonglong
 #from ctypes import *
 from threading import Thread
 from MDSplus.mdsExceptions import DevCOMM_ERROR
@@ -95,7 +95,16 @@ class NI6368AI(Device):
                     ("adc_number", c_uint),
                     ("dac_number", c_uint),
                     ("port0_length", c_uint),
-                    ("serial_number", c_uint)]
+                    ("max_ai_channels", c_uint),
+                    ("serial_number", c_uint),
+                    ("aichan_size", c_uint),
+                    ("aochan_size", c_uint),
+                    ("ext_cal_time", c_float),
+                    ("ext_cal_temp", c_ulonglong),
+                    ("self_cal_time", c_float),
+                    ("self_cal_temp", c_ulonglong),
+                    ("geographical_addr", c_uint)]
+
 
 
 #Driver constants
@@ -324,7 +333,7 @@ class NI6368AI(Device):
             else:
                 NI6368AI.niInterfaceLib.setStopAcqFlag(self.stopAcq);
                 try:
-                    numSamples = self.device.end_idx.data() - self.device.start_idx.data() - 1
+                    numSamples = self.device.end_idx.data() - self.device.start_idx.data()
                 except:
                     numSamples = 0
 
@@ -417,9 +426,23 @@ class NI6368AI(Device):
    
     def init(self):
 
-        self.debugPrint('================= PXI 6368 Init ===============')
+        self.debugPrint('=================  PXI 6368 Init ===============')
 
-        self.restoreInfo()
+
+        ##self.restoreInfo()
+
+#Acquisition in progress module check
+        if self.restoreInfo() == self.DEV_IS_OPEN :
+            try:
+               self.restoreWorker()
+               print 'Chech Start Store'
+               if self.worker.isAlive():
+                  print 'stop Store'
+                  self.stop_store()
+               self.restoreInfo()
+            except:
+               pass
+
 
         aiConf = c_void_p(0)
 
@@ -435,7 +458,7 @@ class NI6368AI(Device):
         dev_fd = os.open(fileName, os.O_RDWR);
         #self.debugPrint('Open ai_fd: ', self.ai_fd)
 
-        device_info = self.XSERIES_DEV_INFO(0,"",0,0,0,0,0,0)
+        device_info = self.XSERIES_DEV_INFO(0,"",0,0,0,0,0,0,0,0,0,0,0,0,0,0)
 
         # get card info
         status = NI6368AI.niInterfaceLib._xseries_get_device_info(c_int(dev_fd), byref(device_info));
@@ -449,7 +472,6 @@ class NI6368AI(Device):
             self.serial_num.putData(device_info.serial_number)
         except:
             pass
-
 
         #self.debugPrint('OK xseries_get_device_info')
 
@@ -563,7 +585,7 @@ class NI6368AI(Device):
 #Originale
                 startIdx = Data.execute('x_to_i($1, $2)', Dimension(Window(0, None, trigTime), clockSource), startTime)
                 #self.debugPrint("Originale startIdx ", startIdx
-                endIdx = Data.execute('x_to_i($1, $2)', Dimension(Window(0, None, trigTime), clockSource), endTime)
+                endIdx = Data.execute('x_to_i($1, $2)', Dimension(Window(0, None, trigTime), clockSource), endTime) + 1
                 #self.debugPrint("Originale endIdx ", endIdx)
 
                 """
@@ -778,6 +800,16 @@ class NI6368AI(Device):
             Data.execute('DevLogErr($1,$2)', self.getNid(), 'Module not Initialized')
             raise mdsExceptions.TclFAILED_ESSENTIAL
 
+#Acquisition in progress module check
+        try:
+            self.restoreWorker()
+            print 'Chech Start Store'
+            if self.worker.isAlive():
+               Data.execute('DevLogErr($1,$2)', self.getNid(), 'Module is acquiring')
+               return
+        except:
+               pass
+
         self.worker = self.AsynchStore()        
         self.worker.daemon = True 
         self.worker.stopReq = False
@@ -823,12 +855,6 @@ class NI6368AI(Device):
 
       error = False
       self.debugPrint ("=============== PXI 6368 stop_store ===========")
-
-      """     
-      if self.restoreInfo() != self.DEV_IS_OPEN :
-          Data.execute('DevLogErr($1,$2)', self.getNid(), 'Module not Initialized')
-          raise mdsExceptions.TclFAILED_ESSENTIAL
-      """
 
       try:
           self.restoreWorker()
