@@ -36,7 +36,6 @@ _dsc=_mimport('descriptor')
 _exc=_mimport('mdsExceptions')
 
 MDSplusException = _exc.MDSplusException
-MdsException = MDSplusException
 #### Load Shared Libraries Referenced #######
 #
 _MdsShr=_ver.load_library('MdsShr')
@@ -54,13 +53,17 @@ class staticmethodX(object):
         if self is None: return None
         return mself.method(Data(self),*args,**kwargs)
 
-def _TdiShrFun(function,errormessage,expression,*args,**kwargs):
+def _TdiShrFun(opcode,errormessage,expression,*args,**kwargs):
     def parseArguments(args):
         if len(args)==1 and isinstance(args[0],tuple):
             return parseArguments(args[0])
         return args
     args  = parseArguments(args) #  unwrap tuple style arg list
     dargs = [Data(expression)]+list(map(Data,args))  # cast to Data type
+    nargs = len(dargs)
+    argslist = (_C.c_void_p*nargs)()
+    for i in _ver.xrange(nargs):
+        argslist[i] = _C.cast(Data.pointer(dargs[i]),_C.c_void_p)
     if "tree" in kwargs:
         tree = kwargs["tree"]
     elif isinstance(expression,Data) and not expression.tree is None:
@@ -72,33 +75,32 @@ def _TdiShrFun(function,errormessage,expression,*args,**kwargs):
             tree = arg.tree
             if isinstance(arg,_tre.TreeNode): break
     xd = _dsc.Descriptor_xd()
-    rargs = list(map(Data.byref,dargs))+[xd.ref,_C.c_void_p(-1)]
-    _tre._TreeCtx.pushTree(tree)
-    try:
-        _exc.checkStatus(function(*rargs))
-    finally:
-        _tre._TreeCtx.popTree()
+    if not isinstance(tree,_tre.Tree):
+        _exc.checkStatus(_TdiShr. TdiIntrinsic(          opcode,nargs,argslist,xd.ref))
+    else:
+        _exc.checkStatus(_TdiShr._TdiIntrinsic(tree.pctx,opcode,nargs,argslist,xd.ref))
     return xd._setTree(tree).value
 
 def TdiCompile(expression,*args,**kwargs):
     """Compile a TDI expression. Format: TdiCompile('expression-string')"""
-    return _TdiShrFun(_TdiShr.TdiCompile,"Error compiling",expression,*args,**kwargs)
-
-def TdiExecute(expression,*args,**kwargs):
-    """Compile and execute a TDI expression. Format: TdiExecute('expression-string')"""
-    return _TdiShrFun(_TdiShr.TdiExecute,"Error executing",expression,*args,**kwargs)
-tdi=TdiExecute
-def TdiDecompile(expression,**kwargs):
-    """Decompile a TDI expression. Format: TdiDecompile(tdi_expression)"""
-    return _ver.tostr(_TdiShrFun(_TdiShr.TdiDecompile,"Error decompiling",expression,**kwargs))
-
-def TdiEvaluate(expression,**kwargs):
-    """Evaluate and functions. Format: TdiEvaluate(data)"""
-    return _TdiShrFun(_TdiShr.TdiEvaluate,"Error evaluating",expression,**kwargs)
+    return _TdiShrFun(99,"Error compiling",expression,*args,**kwargs)
 
 def TdiData(expression,**kwargs):
     """Return primiitive data type. Format: TdiData(value)"""
-    return _TdiShrFun(_TdiShr.TdiData,"Error converting to data",expression,**kwargs)
+    return _TdiShrFun(112,"Error converting to data",expression,**kwargs)
+
+def TdiDecompile(expression,**kwargs):
+    """Decompile a TDI expression. Format: TdiDecompile(tdi_expression)"""
+    return _ver.tostr(_TdiShrFun(119,"Error decompiling",expression,**kwargs))
+
+def TdiEvaluate(expression,**kwargs):
+    """Evaluate and functions. Format: TdiEvaluate(data)"""
+    return _TdiShrFun(158,"Error evaluating",expression,**kwargs)
+
+def TdiExecute(expression,*args,**kwargs):
+    """Compile and execute a TDI expression. Format: TdiExecute('expression-string')"""
+    return _TdiShrFun(159,"Error executing",expression,*args,**kwargs)
+tdi=TdiExecute
 
 class Data(object):
     """Superclass used by most MDSplus objects. This provides default methods if not provided by the subclasses.
@@ -136,7 +138,7 @@ class Data(object):
         if isinstance(value,(Data,_dsc.Descriptor)):
             return value
         if isinstance(value,(_N.ScalarType,_C._SimpleCData)):
-            cls = _sca.Scalar
+            cls = _scr.Scalar
         elif isinstance(value,(_N.ndarray,_C.Array)):
             cls = _arr.Array
         elif isinstance(value,(tuple,list)):
@@ -479,7 +481,7 @@ class Data(object):
         @rtype: Data
         @return: Returns the tdi variable
         """
-        return _sca.Ident(varname).assign(self)
+        return _scr.Ident(varname).assign(self)
 
     @staticmethodX
     def setTdiVar(self,varname):
@@ -489,7 +491,7 @@ class Data(object):
         @rtype: Data
         @return: Returns new value of the tdi variable
         """
-        return _cmp.PUBLIC(_sca.Ident(varname)).assign(self)
+        return _cmp.PUBLIC(_scr.Ident(varname)).assign(self)
 
     @staticmethod
     def getTdiVar(varname):
@@ -498,7 +500,7 @@ class Data(object):
         @type varname: string
         @rtype: Data"""
         try:
-            return _cmp.PUBLIC(_sca.Ident(varname)).evaluate()
+            return _cmp.PUBLIC(_scr.Ident(varname)).evaluate()
         except _exc.MDSplusException:
             return None
 
@@ -534,16 +536,21 @@ class Data(object):
             return data.ref
         if data is None:
             return _dsc.Descriptor.null
-        return cls(data).ref
+        dsc = cls(data)._descriptor
+        ptr = dsc.ptr_;ptr.value = dsc
+        return ptr
 
     @classmethod
     def pointer(cls,data):
         if isinstance(data,_dsc.Descriptor):
             return data.ptr_
-        data = cls(data)
+        if isinstance(data,Data):
+            return data.descriptor.ptr_
         if data is None:
             return _dsc.Descriptor.null
-        return data.descriptor.ptr_
+        dsc = cls(data)._descriptor
+        ptr = dsc.ptr_;ptr.value = dsc
+        return ptr
 
     @property
     def ref(self):
@@ -553,7 +560,7 @@ class Data(object):
     def _isScalar(x):
         """Is item a Scalar
         @rtype: Bool"""
-        return isinstance(x,_sca.Scalar)
+        return isinstance(x,_scr.Scalar)
 
     def getData(self,*altvalue):
         """Return primitimive value of the data.
@@ -767,20 +774,24 @@ class EmptyData(Data):
     def data(self): return None
     @staticmethod
     def fromDescriptor(d): return EmptyData
+# the old API had EmptyData as instance
 EmptyData = EmptyData()
 
-class Missing(EmptyData):
+# Missing should extend the class of EmptyData
+class Missing(EmptyData.__class__):
     """No Value aka $Missing"""
     def decompile(self): return "$Missing"
+
     @staticmethod
     def fromDescriptor(d): return Missing
 
 _dsc.dtypeToClass[0]=Missing
 _dsc.dtypeToArrayClass[0]=Missing
-_dsc.dtypeToClass[EmptyData.dtype_id]=EmptyData
+# also dtypeToClass expects its values to be classes
+_dsc.dtypeToClass[EmptyData.dtype_id]=EmptyData.__class__
 
 _cmp=_mimport('compound')
-_sca=_mimport('mdsscalar')
+_scr=_mimport('mdsscalar')
 _arr=_mimport('mdsarray')
 _tre=_mimport('tree')
 _apd=_mimport('apd')

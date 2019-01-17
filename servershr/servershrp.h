@@ -42,8 +42,8 @@
 typedef struct {
   struct _SrvJob *next;
   struct _SrvJob *previous;
-  int addr;
-  int port;
+  unsigned int addr;
+  unsigned int port;
   int sock;
   int length;
   int op;
@@ -127,11 +127,6 @@ typedef struct {
   } u;
   int status;
 } DispatchEvent;
-
-/*STATIC_THREADSAFE pthread_rwlock_t actions_rwlock = PTHREAD_RWLOCK_INITIALIZER;*/
-#define WRLOCK_ACTION(idx) pthread_rwlock_wrlock(&table->actions[idx].lock)
-#define RDLOCK_ACTION(idx) pthread_rwlock_rdlock(&table->actions[idx].lock)
-#define UNLOCK_ACTION(idx) pthread_rwlock_unlock(&table->actions[idx].lock)
 
 #ifndef _NO_SERVER_SEND_MESSAGE_PROTO
 extern int ServerSendMessage(int *msgid, char *server, int op, int *retstatus, pthread_rwlock_t *lock, int *socket,

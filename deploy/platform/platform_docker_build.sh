@@ -9,6 +9,21 @@
 export HOME=/tmp/home
 srcdir=$(readlink -f $(dirname ${0})/../..)
 mkdir -p $HOME
+RED() {
+  if [ "$COLOR" = "yes" ]
+  then echo -e "\033[31m"
+  fi
+}
+GREEN() {
+  if [ "$COLOR" = "yes" ]
+  then echo -e "\033[32m"
+  fi
+}
+NORMAL() {
+  if [ "$COLOR" = "yes" ]
+  then echo -e "\033[0m"
+  fi
+}
 tio(){
     :&& ${srcdir}/deploy/platform/timeout.sh "$@";
     return $?;
@@ -66,7 +81,7 @@ checkstatus(){
 # checkstatus flagname "error message" $?
         if [ ! -z "$3" -a "$3" != "0" ]
         then
-            RED $COLOR
+            RED
             if [ "$1" = "abort" ]
             then
                 ABORT="                                         Build ABORTED"
@@ -78,7 +93,7 @@ $2
 $ABORT
 ======================================================
 EOF
-            NORMAL $COLOR
+            NORMAL
             if [ "$1" = "abort" ]
             then
                 exit $3
@@ -110,9 +125,9 @@ checktests() {
             checktestarch $arch
         done
         checkstatus abort "Failure: One or more tests have failed (see above)." $failed
-        GREEN $COLOR
+        GREEN
         echo "SUCCESS"
-        NORMAL $COLOR
+        NORMAL
     fi
 }
 
@@ -182,26 +197,7 @@ normaltest() {
    fi
     popd
 }
-RED() {
-    if [ "$1" = "yes" ]
-    then
-        echo -e "\033[31;47m"
-    fi
-}
-GREEN() {
-    if [ "$1" = "yes" ]
-    then
-        echo -e "\033[32;47m"
-    fi
-}
-NORMAL() {
-    if [ "$1" = "yes" ]
-    then
-        echo -e "\033[m"
-    fi
-}
-export PYTHONDONTWRITEBYTECODE=no
-export PyLib=$(ldd $(which python) | grep libpython | awk '{print $3}')
+
 main(){
     MAKE=${MAKE:="make"}
     if [ -r ${srcdir}/deploy/os/${OS}.env ]
@@ -234,6 +230,7 @@ main(){
         publish
     fi
 }
+
 source ${srcdir}/deploy/platform/${PLATFORM}/${PLATFORM}_docker_build.sh
 if [ ! -z "$0" ] && [ ${0:0:1} != "-" ] && [ "$( basename $0 )" = "platform_docker_build.sh" ]
 then

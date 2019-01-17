@@ -29,10 +29,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <treeshr.h>
 #include <mdsshr.h>
 #include "mdsip_connections.h"
+#include "mdsIo.h"
 #include <pthread_port.h>
 
-
-//#define DEBUG
+#ifdef DEBUG
+ #define PDEBUG(...) fprintf(stderr,__VA_ARGS__)
+#else
+ #define PDEBUG(...)
+#endif
 
 static Connection *ConnectionList = NULL;
 static pthread_mutex_t connection_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -55,24 +59,30 @@ Connection *FindConnection(int id, Connection ** prev){
   return c;
 }
 
+EXPORT int GetConnectionVersion(int id){
+  int version;
+  CONNECTIONLIST_LOCK;
+  Connection *c = _FindConnection(id, NULL);
+  version = c ? (int)c->version : -1;
+  CONNECTIONLIST_UNLOCK;
+  return version;
+}
+
+
 Connection *FindConnectionWithLock(int id, char state){
   Connection *c;
   CONNECTIONLIST_LOCK;
   c = _FindConnection(id, NULL);
   if (c) {
     while (c->state>0) {
-#ifdef DEBUG
-      fprintf(stderr,"Connection %02d -- %02x waiting\n",c->id,(unsigned char)state);
-#endif
+      PDEBUG("Connection %02d -- %02x waiting\n",c->id,(unsigned char)state);
       pthread_cond_wait(&c->cond,&connection_mutex);
     }
     if (c->state<0) {
       pthread_cond_signal(&c->cond); // pass on signal
       c = NULL;
     } else {
-#ifdef DEBUG
-      fprintf(stderr,"Connection %02d -> %02x   locked\n",c->id,(unsigned char)state);
-#endif
+      PDEBUG("Connection %02d -> %02x   locked\n",c->id,(unsigned char)state);
       c->state = state;
     }
   }
@@ -84,9 +94,7 @@ void UnlockConnection(Connection* c) {
   if (c) {
     CONNECTIONLIST_LOCK;
     c->state &= CON_DISCONNECT; // preserve CON_DISCONNECT
-#ifdef DEBUG
-      fprintf(stderr,"Connection %02d -> %02x unlocked\n",c->id,(unsigned char)c->state);
-#endif
+    PDEBUG("Connection %02d -> %02x unlocked\n",c->id,(unsigned char)c->state);
     pthread_cond_signal(&c->cond);
     CONNECTIONLIST_UNLOCK;
   }
@@ -266,7 +274,7 @@ IoRoutines *GetConnectionIo(int conid){
 //  GetConnectionInfo  /////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-void *GetConnectionInfoC(Connection* c, char **info_name, int *readfd, size_t * len){
+void *GetConnectionInfoC(Connection* c, char **info_name, SOCKET *readfd, size_t * len){
   if (c) {
     if (len)
       *len = c->info_len;
@@ -279,7 +287,7 @@ void *GetConnectionInfoC(Connection* c, char **info_name, int *readfd, size_t * 
   return NULL;
 }
 
-void *GetConnectionInfo(int conid, char **info_name, int *readfd, size_t * len){
+void *GetConnectionInfo(int conid, char **info_name, SOCKET *readfd, size_t * len){
   void *ans;
   CONNECTIONLIST_LOCK;
   Connection *c = _FindConnection(conid, 0);
@@ -292,7 +300,7 @@ void *GetConnectionInfo(int conid, char **info_name, int *readfd, size_t * len){
 //  SetConnectionInfo  /////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-void SetConnectionInfoC(Connection* c, char *info_name, int readfd, void *info, size_t len){
+void SetConnectionInfoC(Connection* c, char *info_name, SOCKET readfd, void *info, size_t len){
   if (c) {
     c->info_name = strcpy(malloc(strlen(info_name) + 1), info_name);
     if (info) {
@@ -306,7 +314,7 @@ void SetConnectionInfoC(Connection* c, char *info_name, int readfd, void *info, 
   }
 }
 
-void SetConnectionInfo(int conid, char *info_name, int readfd, void *info, size_t len){
+void SetConnectionInfo(int conid, char *info_name, SOCKET readfd, void *info, size_t len){
   CONNECTIONLIST_LOCK;
   Connection *c = _FindConnection(conid, 0);
   if (c) SetConnectionInfoC(c, info_name, readfd, info, len);
@@ -438,7 +446,7 @@ int AddConnection(Connection* c) {
 }
 
 
-int AcceptConnection(char *protocol, char *info_name, int readfd, void *info, size_t info_len, int *id, char **usr){
+int AcceptConnection(char *protocol, char *info_name, SOCKET readfd, void *info, size_t info_len, int *id, char **usr){
   Connection* c = NewConnectionC(protocol);
   INIT_STATUS_ERROR;
   if (c) {
@@ -467,7 +475,10 @@ int AcceptConnection(char *protocol, char *info_name, int readfd, void *info, si
     // SET COMPRESSION //
     if STATUS_OK {
       c->compression_level = m_user->h.status & 0xf;
+      c->client_type = m_user->h.client_type;
       *usr = strcpy(malloc(strlen(user_p) + 1), user_p);
+      if (m_user->h.ndims>0)
+        c->version = m_user->h.dims[0];
     } else
       *usr = NULL;
     if STATUS_NOT_OK
@@ -477,6 +488,8 @@ int AcceptConnection(char *protocol, char *info_name, int readfd, void *info, si
     if (user) free(user);
     m.h.status = STATUS_OK ? (1 | (c->compression_level << 1)) : 0;
     m.h.client_type = m_user ? m_user->h.client_type : 0;
+    m.h.ndims = 1;
+    m.h.dims[0] = MDSIP_VERSION;
     if (m_user)
       MdsIpFree(m_user);
     // reply to client //

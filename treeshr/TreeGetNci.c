@@ -35,6 +35,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <string.h>
 #include <mds_stdarg.h>
+#include <strroutines.h>
 #ifndef O_BINARY
 #define O_BINARY 0
 #endif
@@ -42,14 +43,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define O_RANDOM 0
 #endif
 
-extern int StrFree1Dx();
-
 static inline int minInt(int a, int b) { return a < b ? a : b; }
 
 #define read_nci \
  if (nci_version != version)\
  {\
     nid_to_tree_nidx(dblist, (&nid), info, node_number);\
+    TreeCallHookFun("TreeNidHook","GetNci",info->treenam, info->shot, nid, NULL); \
     status = TreeCallHook(GetNci,info,nid_in);\
     if (status && STATUS_NOT_OK) break;\
     status = TreeGetNciW(info, node_number, &nci,version);\
@@ -69,11 +69,6 @@ char *TreeGetMinimumPath(int *def_nid_in, int nid_in)
   return _TreeGetMinimumPath(*TreeCtx(), def_nid_in, nid_in);
 }
 
-int TreeGetNci(int nid_in, struct nci_itm *nci_itm)
-{
-  return _TreeGetNci(*TreeCtx(), nid_in, nci_itm);
-}
-
 char *TreeGetPath(int nid_in)
 {
   return _TreeGetPath(*TreeCtx(), nid_in);
@@ -84,8 +79,16 @@ int TreeIsOn(int nid)
   return _TreeIsOn(*TreeCtx(), nid);
 }
 
-int _TreeGetNci(void *dbid, int nid_in, struct nci_itm *nci_itm)
-{
+int _TreeGetNci(void *dbid, int nid_in, struct nci_itm *nci_itm) {
+  int status;
+  CTX_PUSH(&dbid);
+  status = TreeGetNci(nid_in, nci_itm);
+  CTX_POP(&dbid);
+  return status;
+}
+
+int TreeGetNci(int nid_in, struct nci_itm *nci_itm){
+  void*dbid = *TreeCtx();
   INIT_STATUS_AS TreeNORMAL;
   PINO_DATABASE *dblist = (PINO_DATABASE *) dbid;
   NID nid = *(NID *) & nid_in;
@@ -100,7 +103,7 @@ int _TreeGetNci(void *dbid, int nid_in, struct nci_itm *nci_itm)
   NODE *cng_node;
   int node_exists;
   int depth;
-  int64_t rfa_l;
+  uint64_t rfa_l;
   int count = 0;
   NID *out_nids;
   NID *end_nids;
@@ -210,7 +213,7 @@ int _TreeGetNci(void *dbid, int nid_in, struct nci_itm *nci_itm)
       read_nci;
       set_retlen(sizeof(rfa_l));
       rfa_l = RfaToSeek(nci.DATA_INFO.DATA_LOCATION.rfa);
-      memcpy(itm->pointer, &rfa_l, minInt(sizeof(unsigned int), itm->buffer_length));
+      memcpy(itm->pointer, &rfa_l, minInt(sizeof(rfa_l), itm->buffer_length));
       break;
     case NciCONGLOMERATE_ELT:
       break_on_no_node;
@@ -349,7 +352,7 @@ int _TreeGetNci(void *dbid, int nid_in, struct nci_itm *nci_itm)
     case NciORIGINAL_PART_NAME:
       break_on_no_node;
       if (swapshort((char *)&node->conglomerate_elt)) {
-	struct descriptor string_d = { 0, DTYPE_T, CLASS_D, 0 };
+	struct descriptor_d string_d = { 0, DTYPE_T, CLASS_D, 0 };
 	DESCRIPTOR_NID(nid_dsc, 0);
 	DESCRIPTOR(part_name, "PART_NAME");
 	nid_dsc.pointer = (char *)&nid;
@@ -743,7 +746,12 @@ int _TreeOpenNciR(TREE_INFO * info)
     info->nci_file = calloc(1,sizeof(NCI_FILE));
     if (info->nci_file) {
       size_t len = strlen(info->filespec) - 4;
+#pragma GCC diagnostic push
+#if defined __GNUC__ && 800 <= __GNUC__ * 100 + __GNUC_MINOR__
+    _Pragma ("GCC diagnostic ignored \"-Wstringop-overflow\"")
+#endif
       char *filename = strncpy(malloc(len + 16), info->filespec, len);
+#pragma GCC diagnostic pop
       filename[len] = '\0';
       strcat(filename, "characteristics");
       info->nci_file->get = MDS_IO_OPEN(filename, O_RDONLY | O_BINARY | O_RANDOM, 0);

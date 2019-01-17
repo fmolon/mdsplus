@@ -40,6 +40,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <mdsdcl_messages.h>
 #include "dcl_p.h"
 #include "mdsdclthreadsafe.h"
+#include <treeshr.h>
 
 
 dclDocListPtr mdsdcl_getdocs(){
@@ -517,7 +518,7 @@ static int dispatchToHandler(char *image, dclCommandPtr cmd, dclCommandPtr cmdDe
 			     char **error, char **output, char *(*getline) (), void *getlineinfo)
 {
   int i;
-  int (*handler) (dclCommandPtr, char **, char **, char *(*getline) (), void *getlineinfo);
+  int (*handler) (dclCommandPtr, char **, char **, char *(*getline) (), void *getlineinfo) = NULL;
   int status;
 
   /* Make sure the command processing discovered the name of the handler routine.
@@ -796,7 +797,7 @@ static int dispatchToHandler(char *image, dclCommandPtr cmd, dclCommandPtr cmdDe
     image = "Mdsdcl";
   if (cmdDef->image)
     image = cmdDef->image;
-  status = LibFindImageSymbol_C(image, cmdDef->routine, (void **)&handler);
+  status = LibFindImageSymbol_C(image, cmdDef->routine, &handler);
   if (status & 1) {
     status = handler(cmd, error, output, getline, getlineinfo);
     if (!(status & 1)) {
@@ -1162,9 +1163,7 @@ EXPORT int mdsdcl_do_command(char const *command)
   return status;
 }
 
-EXPORT int mdsdcl_do_command_dsc(char const *command, struct descriptor_xd *error_dsc,
-			  struct descriptor_xd *output_dsc)
-{
+EXPORT int mdsdcl_do_command_dsc(char const *command, struct descriptor_xd *error_dsc, struct descriptor_xd *output_dsc) {
   char *error = 0;
   char *output = 0;
   int status =
@@ -1180,6 +1179,13 @@ EXPORT int mdsdcl_do_command_dsc(char const *command, struct descriptor_xd *erro
     MdsCopyDxXd(&d, output_dsc);
     free(output);
   }
+  return status;
+}
+EXPORT int _mdsdcl_do_command_dsc(void**ctx, char const *command, struct descriptor_xd *error_dsc, struct descriptor_xd *output_dsc){
+  int status;
+  CTX_PUSH(ctx);
+  status = mdsdcl_do_command_dsc(command,error_dsc,output_dsc);
+  CTX_POP(ctx);
   return status;
 }
 

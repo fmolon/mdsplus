@@ -36,27 +36,20 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
         Ken Klare, LANL P-4     (c)1992
 */
-#define DEF_FREED
-#define DEF_FREEXD
 #include <STATICdef.h>
 #include <stdlib.h>
 #include <mdsdescrip.h>
 #include "tdirefstandard.h"
 #include <libroutines.h>
 #include <strroutines.h>
-#include <tdishr_messages.h>
+#include <tdishr.h>
 #include <pthread_port.h>
 #include <errno.h>
 #include <mdsshr.h>
 #include <treeshr.h>
 
-
-extern int TdiTaskOf();
 extern int TdiGetFloat();
 extern int TdiGetLong();
-extern int TdiConvert();
-extern int TdiSubtract();
-extern int TdiData();
 extern int TdiGetNid();
 extern int TdiPutLong();
 extern int TdiCall();
@@ -98,7 +91,7 @@ STATIC_ROUTINE int Doit(struct descriptor_routine *ptask, struct descriptor_xd *
       status = TdiData(pmethod->method, &method_d MDS_END_ARG);
       if STATUS_OK
 	status = TdiGetNid(pmethod->object, &nid);
-      status = (int)((char *)LibCallg(arglist, TreeDoMethod) - (char *)0);
+      status = (int)(intptr_t)LibCallg(arglist, TreeDoMethod);
       FREED_NOW(&method_d);
       status = TdiPutLong(&status, out_ptr);
       break;

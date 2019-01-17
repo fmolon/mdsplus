@@ -41,8 +41,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         NEED way to specify character string subscript range
 */
 
-#define _MOVC3(a,b,c) memcpy(c,b,a)
-
 #include <STATICdef.h>
 #include "tdirefcat.h"
 #include "tdirefstandard.h"
@@ -66,7 +64,7 @@ int Tdi1SetRange(int opcode, int narg, struct descriptor *list[], struct descrip
   struct descriptor_xd sig[1], uni[1], dat[1], tmp = EMPTY_XD;
   struct descriptor_range *prange;
   struct TdiCatStruct cats[2];
-  array_bounds *pa = 0, arr;
+  array_bounds *pa = 0, arr = {0};
   int bounds = 0, coeff = 0, defhi, deflo, dimct, hi, j, lo, ndim = 0, cmode = 0;
 
 	/******************
@@ -75,7 +73,7 @@ int Tdi1SetRange(int opcode, int narg, struct descriptor *list[], struct descrip
   status = TdiGetArgs(opcode, 1, &list[narg - 1], sig, uni, dat, cats);
 
   if STATUS_OK {
-    _MOVC3(sizeof(arr0), (char *)&arr0, (char *)&arr);
+    memcpy(&arr,&arr0,sizeof(arr0));arr.a0=NULL;
     pa = (array_bounds *) dat[0].pointer;
     if (pa == 0)
       status = TdiNULL_PTR;
@@ -103,7 +101,6 @@ int Tdi1SetRange(int opcode, int narg, struct descriptor *list[], struct descrip
       }
   }
   arr.dimct = (unsigned char)(dimct = narg - 1);
-  arr.a0 = 0;
 
 	/******************************
         For each input, check defaults.
@@ -174,9 +171,11 @@ int Tdi1SetRange(int opcode, int narg, struct descriptor *list[], struct descrip
       }
     }
 
-    if (lo != 0)
+    if (lo != 0) {
       arr.aflags.bounds = 1;
-    arr.a0 -= lo * (int)arr.arsize;
+      arr.a0 = pa->pointer;
+      arr.pointer = arr.a0 + lo;
+    }
     arr.m[dimct + 2 * j] = lo;
     arr.m[dimct + 2 * j + 1] = hi;
     arr.m[j] = hi - lo + 1;
@@ -184,10 +183,10 @@ int Tdi1SetRange(int opcode, int narg, struct descriptor *list[], struct descrip
   }
   MdsFree1Dx(&tmp, NULL);
 
-  arr.aflags.coeff = (unsigned char)(dimct > 1 || arr.aflags.bounds);
-  if STATUS_OK
+  if STATUS_OK {
+    arr.aflags.coeff = (unsigned char)(dimct > 1 || arr.aflags.bounds);
     status = MdsGet1DxA((struct descriptor_a *)&arr, &pa->length, &pa->dtype, out_ptr);
-
+  }
 	/***********************
         Copy/expand data to new.
         ***********************/

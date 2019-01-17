@@ -69,7 +69,7 @@ EXPORT int IdlMdsClose(int argc, void **argv)
   int status;
   BlockSig(SIGALRM);
   if (argc > 1)
-    status = TreeClose((char *)argv[0], ((char *)argv[1] - (char *)0));
+    status = TreeClose((char *)argv[0], (int)(intptr_t)argv[1]);
   else {
     status = TreeClose(0, 0);
     while (TreeClose(0, 0) & 1) ;
@@ -83,7 +83,7 @@ EXPORT int IdlMdsOpen(int argc, void **argv)
   int status = 0;
   if (argc == 2) {
     BlockSig(SIGALRM);
-    status = TreeOpen((char *)argv[0], ((char *)argv[1] - (char *)0), 0);
+    status = TreeOpen((char *)argv[0], (int)(intptr_t)argv[1], 0);
     UnBlockSig(SIGALRM);
   }
   return status;
@@ -352,7 +352,7 @@ EXPORT int IdlMdsValue(int argc, void **argv)
   arglist[argidx++] = (void *)&tmp;
   arglist[argidx++] = MdsEND_ARG;
   *(long *)&arglist[0] = argidx;
-  status = (char *)LibCallg(arglist, TdiExecute) - (char *)0;
+  status = (int)(intptr_t)LibCallg(arglist, TdiExecute);
   if (status & 1) {
     status = TdiData(tmp.pointer, &mdsValueAnswer MDS_END_ARG);
     MdsFree1Dx(&tmp, NULL);
@@ -443,12 +443,19 @@ EXPORT int IdlMdsValue(int argc, void **argv)
 	char dims[512] = "(";
 	int i;
 	if (ptr->aflags.coeff)
-	  for (i = 0; i < ptr->dimct; i++)
-	    sprintf(dims, "%s%d,", dims, ptr->m[i] > 0 ? ptr->m[i] : 1);
-	else
-	  sprintf(dims, "%s%d,", dims,
+	  for (i = 0; i < ptr->dimct; i++) {
+	    char dim[16];
+	    sprintf(dim, "%d,", ptr->m[i] > 0 ? ptr->m[i] : 1);
+	    strcat(dims,dim);
+	  }
+	else {
+	  char dim[16];
+	  sprintf(dim, "%d,",
 		  ((ptr->arsize / ptr->length) > 0) ? (ptr->arsize / ptr->length) : 1);
-	dims[strlen(dims) - 1] = ')';
+	  strcat(dims,dim);
+	}
+        dims[strlen(dims)-1]='\0';
+	strcat(dims,")");
 	switch (mdsValueAnswer.pointer->dtype) {
 	case DTYPE_B:
 	  strcpy((char *)argv[2], "if max(answer) gt 127 then answer = fix(answer)-256");
@@ -546,7 +553,7 @@ EXPORT int IdlMdsPut(int argc, void **argv)
     arglist[argidx++] = (void *)&tmp;
     arglist[argidx++] = MdsEND_ARG;
     *(int *)&arglist[0] = argidx;
-    status = (char *)LibCallg(arglist, TdiCompile) - (char *)0;
+    status = (int)(intptr_t)LibCallg(arglist, TdiCompile);
     if (status & 1) {
       status = TreePutRecord(nid, (struct descriptor *)&tmp, 0);
       MdsFree1Dx(&tmp, NULL);

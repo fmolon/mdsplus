@@ -4,6 +4,7 @@
 #define _GNU_SOURCE /* glibc2 needs this */
 #include <mdsplus/mdsconfig.h>
 #include <mdsdescrip.h>
+#include <status.h>
 #ifdef _WIN32
  #ifndef __SIZE_TYPE__
  typedef int ssize_t;
@@ -79,8 +80,9 @@ typedef struct _connection {
   void *tdicontext[6];
   int addr;
   int compression_level;
-  int readfd;
+  SOCKET readfd;
   struct _io_routines *io;
+  unsigned short version;
 } Connection;
 
 #define INVALID_CONNECTION_ID 0
@@ -158,6 +160,7 @@ typedef struct _io_routines {
   int (*reuseCheck)(char *connectString, char *uniqueString, size_t buflen);
   int (*disconnect)(Connection* c);
   ssize_t (*recv_to)(Connection* c, void *buffer, size_t len, int to_msec);
+  int     (*check)(Connection* c);
 } IoRoutines;
 
 #define EVENTASTREQUEST "---EVENTAST---REQUEST---"
@@ -217,7 +220,7 @@ typedef void *pthread_mutex_t;
 /// \param user
 /// \return
 ///
-EXPORT int AcceptConnection(char *protocol, char *info_name, int readfd,
+EXPORT int AcceptConnection(char *protocol, char *info_name, SOCKET readfd,
                             void *info, size_t infolen, int *conid,
                             char **user);
 
@@ -377,9 +380,9 @@ EXPORT int GetCompressionLevel();
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-EXPORT void *GetConnectionInfoC(Connection* c, char **info_name, int *readfd,
+EXPORT void *GetConnectionInfoC(Connection* c, char **info_name, SOCKET *readfd,
                                size_t *len);
-EXPORT void *GetConnectionInfo(int id, char **info_name, int *readfd,
+EXPORT void *GetConnectionInfo(int id, char **info_name, SOCKET *readfd,
                                size_t *len);
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -457,7 +460,7 @@ EXPORT char *GetProtocol();
 
 EXPORT int GetService();
 
-EXPORT int GetSocketHandle();
+EXPORT SOCKET GetSocketHandle();
 
 EXPORT int GetWorker();
 
@@ -645,7 +648,7 @@ EXPORT int ReuseCheck(char *hostin, char *unique, size_t buflen);
 ///
 EXPORT int SendArg(int id, unsigned char idx, char dtype, unsigned char nargs,
                    unsigned short length, char ndims, int *dims, char *bytes);
-
+EXPORT int SendDsc(int id, unsigned char idx, unsigned char nargs, struct descriptor* dsc);
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// This is the main function that is called by user or any higher level
@@ -685,8 +688,8 @@ int SendMdsMsgC(Connection* c, Message *m, int msg_options);
 /// \param info accessory info descriptor
 /// \param len length of accessory info descriptor
 ///
-EXPORT void SetConnectionInfo(int conid, char *info_name, int readfd, void *info, size_t len);
-EXPORT void SetConnectionInfoC(Connection* c, char *info_name, int readfd, void *info, size_t len);
+EXPORT void SetConnectionInfo(int conid, char *info_name, SOCKET readfd, void *info, size_t len);
+EXPORT void SetConnectionInfoC(Connection* c, char *info_name, SOCKET readfd, void *info, size_t len);
 
 EXPORT int SetCompressionLevel(int setting);
 
@@ -710,7 +713,7 @@ EXPORT char *SetProtocol(char *);
 
 EXPORT int SetService(int setting);
 
-EXPORT int SetSocketHandle(int handle);
+EXPORT SOCKET SetSocketHandle(SOCKET handle);
 
 EXPORT int SetWorker(int setting);
 

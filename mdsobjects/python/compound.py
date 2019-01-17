@@ -39,6 +39,10 @@ _tre=_mimport('tree')
 _exc=_mimport('mdsExceptions')
 
 class Compound(_dat.Data):
+    fields = tuple()
+    def __dir__(self):
+        """used for tab completion"""
+        return list(self.fields)+_ver.superdir(Compound,self)
 
     def __init__(self,*args, **kwargs):
         """MDSplus compound data."""
@@ -222,11 +226,18 @@ class Compound(_dat.Data):
             d.pointer= _C.cast(_C.pointer(_C.c_uint16(self.opcode)),_C.c_void_p)
         d.dtype = self.dtype_id
         d.ndesc = self.getNumDescs()
-        # to store the refs of the descriptors to prever premature gc
+        # to store the refs of the descriptors to prevent premature gc
         d.array = [None]*d.ndesc
         for idx in _ver.xrange(d.ndesc):
-            d.array[idx] = _dat.Data(self.getDescAt(idx))
-            d.dscptrs[idx] = _dat.Data.pointer(d.array[idx])
+            data = self.getDescAt(idx)
+            if data is None:
+                d.dscptrs[idx] = None
+            else:
+                if isinstance(data,_dsc.Descriptor):
+                    d.array[idx] = data
+                else:
+                    d.array[idx] = _dat.Data(data)._descriptor
+                d.dscptrs[idx] = d.array[idx].ptr_
         return self._descriptorWithProps(self,d)
 
     @classmethod
@@ -397,6 +408,14 @@ class Routine(Compound):
     fields=('timeout','image','routine')
     dtype_id=205
 _dsc.addDtypeToClass(Routine)
+
+class Slope(Compound):
+    """A Slope is a deprecated object. You should use Range instead."""
+    fields=('slope','begin','end')
+    dtype_id=198
+    def slice(self):
+        return slice(self.begin.data(),self.end.data(),self.slope.data())
+_dsc.addDtypeToClass(Slope)
 
 class Signal(Compound):
     """A Signal is used to describe a measurement, usually time dependent, and associated the data with its independent

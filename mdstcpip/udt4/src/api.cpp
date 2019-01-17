@@ -51,6 +51,10 @@ written by
 #include "api.h"
 #include "core.h"
 
+#if defined __GNUC__ && 800 <= __GNUC__ * 100 + __GNUC_MINOR__
+    _Pragma ("GCC diagnostic ignored \"-Wcatch-value\"")
+#endif
+
 using namespace std;
 
 CUDTSocket::CUDTSocket():
@@ -84,6 +88,7 @@ m_iMuxID(-1)
 
 CUDTSocket::~CUDTSocket()
 {
+   CGuard cg(m_ControlLock);
    if (AF_INET == m_iIPversion)
    {
       delete (sockaddr_in*)m_pSelfAddr;

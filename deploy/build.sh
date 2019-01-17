@@ -5,6 +5,21 @@
 # Build mdsplus for a selected operating system for testing or
 # generating installers.
 #
+RED() {
+  if [ "$COLOR" = "yes" ]
+  then echo -e "\033[31m"
+  fi
+}
+GREEN() {
+  if [ "$COLOR" = "yes" ]
+  then echo -e "\033[32m"
+  fi
+}
+NORMAL() {
+  if [ "$COLOR" = "yes" ]
+  then echo -e "\033[0m"
+  fi
+}
 printhelp() {
     cat <<EOF
 NAME
@@ -23,7 +38,7 @@ SYNOPSIS
                [--distname=name] [--updatepkg] [--eventport=number]
                [--arch=name] [--color] [--winhost=hostname]
                [--winbld=dir] [--winrembld=dir] [--gitcommit=commit]
-               [--jars-dir=dir] [--make-jars] [--docker-srcdir=dir]
+               [--jars] [--jars-dir=dir] [--make-jars] [--docker-srcdir=dir]
 
 DESCRIPTION
     The build.sh script is used for building, testing and deploy MDSplus
@@ -109,7 +124,7 @@ OPTIONS
        timeout time for a test will be set to this value times the normal
        timeout for the test. For example, --test_timeunit=2.5 would
        allow the tests to run 2.5 as long as the normally do before being
-       stopped with a timeout error. 
+       stopped with a timeout error.
 
    --eventport=number
        Select a port number to use for udp event tests. If running
@@ -193,9 +208,12 @@ OPTIONS
     --gitcommit=commit
        Set by trigger jenkins job representing the commit hash of the sources.
 
-    --jars-dir=dir
+    --jars
        Set by trigger job to indicate that build job should get the java jar
        files from the trigger source directory instead of building them.
+
+    --jars-dir=dirspec
+       Use java jars from specified directory tree.
 
     --make-jars
        Triggers the generation of the java programs (.jar files)
@@ -295,7 +313,6 @@ parsecmd() {
 		EVENT_PORT="${i#*=}"
 		;;
 	    --release)
-		RELEASE_VERSION=1.2.3
 		RELEASE=yes
 		;;
             --release=*)
@@ -303,7 +320,6 @@ parsecmd() {
 		RELEASE=yes
 		;;
 	    --publish)
-		RELEASE_VERSION=1.2.3
 		PUBLISH=yes
 		;;
             --publish=*)
@@ -382,6 +398,9 @@ parsecmd() {
 	    --gitcommit=*)
 		GIT_COMMIT="${i#*=}"
 		;;
+	    --jars)
+		JARS_DIR="${JARS_DIR-$(realpath $(dirname ${0})/../jars)}"
+		;;
 	    --jars-dir=*)
 		JARS_DIR="$(realpath ${i#*=})"
 		;;
@@ -445,30 +464,13 @@ Build script executing with the following combined options:
 EOF
 parsecmd "${trigger_opts} ${os_opts} ${opts}"
 
-RED() {
-    if [ "$1" = "yes" ]
-    then
-	echo -e "\033[31;47m"
-    fi
-}
-GREEN() {
-    if [ "$1" = "yes" ]
-    then
-	echo -e "\033[32;47m"
-    fi
-}
-NORMAL() {
-    if [ "$1" = "yes" ]
-    then
-	echo -e "\033[m"
-    fi
-}
+RELEASE_VERSION="${RELEASE_VERSION-1.2.3}"
 
 if [ "$RELEASE" = "yes" -o "$PUBLISH" = "yes" ]
 then
     if [ -r $PUBLISHDIR/${DISTNAME}/${BRANCH}_${RELEASE_VERSION}_${OS} ]
     then
-	GREEN $COLOR
+	GREEN
 	cat <<EOF
 ==================================================================
 
@@ -477,7 +479,7 @@ The build will be skipped.
 
 ==================================================================
 EOF
-	NORMAL $COLOR
+	NORMAL
 	exit 0
     fi
 fi
@@ -501,7 +503,7 @@ if [ "${TEST}"            != "yes"  \
  -a  "${RELEASE}"         != "yes"  \
  -a  "${PUBLISH}"         != "yes"  ]
 then
-    >&2 echo "None of --test --make-jars --release=version --publish=version options specified on the command. Nothing to do!"
+    >&2 echo "None of --test --make-jars --release=version --publish=version options specified on the command or skipped. Nothing to do!"
     exit 0
 fi
 #
@@ -671,7 +673,7 @@ OS=${OS} \
   ${SRCDIR}/deploy/platform/platform_build.sh
 if [ "$?" != "0" ]
 then
-    RED $COLOR
+    RED
     cat <<EOF >&2
 ============================================
 
@@ -679,10 +681,10 @@ Failure: The build was unsuccessful!
 
 ============================================
 EOF
-    NORMAL $COLOR
+    NORMAL
     exit 1
 else
-    GREEN $COLOR
+    GREEN
     cat <<EOF
 ============================================
 
@@ -690,7 +692,7 @@ Success!
 
 ============================================
 EOF
-    NORMAL $COLOR
+    NORMAL
     if [ "$PUBLISH" = "yes" ]
     then
 	touch $PUBLISHDIR/${BRANCH}_${RELEASE_VERSION}_${OS}

@@ -12,7 +12,7 @@ extern "C" {
 #else
 #ifdef EXPORT
 #undef EXPORT
-#endif	
+#endif
 #define EXPORT
 #endif
 #include <mdstypes.h>
@@ -270,6 +270,21 @@ extern int TREE_BLOCKID;
   extern EXPORT int TreeGetSegmentScale(int nid, struct descriptor_xd *value);
   extern EXPORT int _TreeSetSegmentScale(void *dbid, int nid, struct descriptor *value);
   extern EXPORT int TreeSetSegmentScale(int nid, struct descriptor *value);
+
+  extern EXPORT int _TreeExecute(void *dbid, ...);
+  extern EXPORT int _TreeEvaluate(void *dbid, ...);
+  extern EXPORT int _TreeDecompile(void *dbid, ...);
+  extern EXPORT int _TreeCompile(void *dbid, ...);
+
+  typedef struct pushstate_s{
+  int   priv;
+  void* dbid;
+  void**ctx;
+  } pushstate_t;
+  extern EXPORT void* ctx_push(void** ctx);
+  extern EXPORT void  ctx_pop(void* ps);
+  #define CTX_PUSH(ctx) pthread_cleanup_push(ctx_pop,ctx_push(ctx))
+  #define CTX_POP(ctx)  pthread_cleanup_pop(1)
 
 #ifdef __cplusplus
 }

@@ -455,14 +455,67 @@
 }
 
 {
-   python 32bit problem during thread shutdown via fork
+   python 32bit problem during thead after fork and fc27
    Helgrind:Race
    fun:blas_thread_shutdown_
-   fun:fork
 }
 
 {
    race with PyThreadState
    Helgrind:Race
    fun:PyGILState_Ensure
+}
+
+
+{
+   OPENSSL_cleanup on fc27
+   Helgrind:Race
+   ...
+   fun:OPENSSL_cleanup
+}
+
+{
+   python 32bit problem during thead after fork and fc25
+   Helgrind:Race
+   fun:blas_shutdown_
+}
+
+{
+   Exiting thread still holds 1 lock python on fc25
+   Helgrind:Misc
+   obj:/usr/lib64/libc-2.24.so
+   fun:_IO_file_xsgetn
+   fun:fread
+   obj:/usr/lib*/libpython2.7.so.1.0
+}
+
+{
+   fc28 and python36m
+   Helgrind:Race
+   ...
+   fun:_PyFunction_FastCallDict
+   fun:_PyObject_FastCallDict
+   fun:_PyObject_Call_Prepend
+   fun:PyObject_Call
+}
+
+{
+   fc28 and python36m Thread Locks
+   Helgrind:Race
+   fun:PyEval_RestoreThread
+}
+
+{
+   fc28 and python36m internals
+   Helgrind:Race
+   obj:/usr/lib*/libpython3.6.so.1.0
+   fun:PyEval_AcquireThread
+   obj:/usr/lib*/libpython3.6.so.1.0
+}
+
+{
+   fc28 and python36m internals
+   Helgrind:Race
+   fun:_PyEval_EvalFrameDefault
+   obj:/usr/lib*/libpython3.6.so.1.0
 }

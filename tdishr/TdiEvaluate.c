@@ -46,6 +46,7 @@ RULES OF THE GAME:
 #include <treeshr.h>
 #include <stdlib.h>
 #include <string.h>
+#include <mdsplus/mdsplus.h>
 
 
 
@@ -58,7 +59,7 @@ extern int TdiCall();
 extern int TdiImpose();
 extern int Tdi1Vector();
 
-int Tdi1Evaluate(int opcode __attribute__ ((unused)),
+EXPORT int Tdi1Evaluate(int opcode __attribute__ ((unused)),
 		 int narg __attribute__ ((unused)),
 		 struct descriptor *list[], struct descriptor_xd *out_ptr)
 // SsINTERNAL: requires MdsCopyDxXd
@@ -106,6 +107,8 @@ int Tdi1Evaluate(int opcode __attribute__ ((unused)),
       }
       break;
     }
+    MDS_ATTR_FALLTHROUGH
+
   /*****************************************************************************
   WARNING falls through if an XD but not DSC of usable data (no known examples).
   *****************************************************************************/

@@ -64,7 +64,9 @@ class Descriptor(object):
         _tre = _mimport('tree')
         if isinstance(tree,_tre.Tree): self.tree=tree
         return self
-
+    def __str__(self):
+       return "%s(%d,%s,%d,0x%x)"%(self.__class__.__name__,self.length,dtypeToClass[self.dtype].__name__,self.dclass,self.pointer)
+    def __repr__(self): return str(self)
     @property
     def desc_class(self):
         return dclassToClass[self.dclass]
@@ -192,6 +194,7 @@ class Descriptor_a(Descriptor):
     def _new_structure(self,arsize=0,**kwarg):
         super(Descriptor_a,self)._new_structure(**kwarg)
         self._structure.arsize = arsize
+        self._structure.aflags=48
     PTR = _C.POINTER(_structure_class)
     null= _C.cast(0,PTR)
     @property

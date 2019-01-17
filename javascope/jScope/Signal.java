@@ -1169,7 +1169,7 @@ public class Signal implements WaveDataListener
         curr_y_xz_plot = Float.NaN;
         curr_y_xz_idx = -1;
 
-        if( zY2D != null )
+        if( zY2D != null && idx < zY2D.length)
         {
             ymin = ymax = zY2D[idx];
             for (int j = 0; j < y2d.length; j++)
@@ -1187,6 +1187,9 @@ public class Signal implements WaveDataListener
         sliceY = new float[y2d.length];
         
         int zLen = z.length;
+	if(idx >= zLen)
+	    return;
+	
         float sliceMin, sliceMax;
         sliceMin = sliceMax = z[idx];
         for (int j = 0; j < y2d.length; j++)
@@ -1947,7 +1950,9 @@ public class Signal implements WaveDataListener
             return;
         }
 
-        float currY[];
+	if(y == null || y.length == 0) 
+	    return;  
+	float currY[];
          if(type == TYPE_2D && (mode2D == MODE_XZ || mode2D == MODE_YZ))
             currY = sliceY;
         else
@@ -2098,20 +2103,23 @@ public class Signal implements WaveDataListener
                         this.xmax = curr_xmax = xMax;
                 }
 //Autoscale Y, ymin and ymax are possibly changed afterwards
-                this.ymin = this.ymax = y[0];
-                for(int i = 0; i < y.length; i++)
-                {
-                    if(y[i] < this.ymin)
-                        this.ymin = y[i];
-                    if(y[i] > this.ymax)
-                        this.ymax = y[i];
-                }
-                
-                if(data.isXLong())
-                {
-                    xLong = xyData.xLong;
-                }
-                resolutionManager.addRegion(new RegionDescriptor(xMin, xMax, xyData.resolution));
+		if(y.length > 0)
+		{
+		    this.ymin = this.ymax = y[0];
+		    for(int i = 0; i < y.length; i++)
+		    {
+			if(y[i] < this.ymin)
+			    this.ymin = y[i];
+			if(y[i] > this.ymax)
+			    this.ymax = y[i];
+		    }
+		    
+		    if(data.isXLong())
+		    {
+			xLong = xyData.xLong;
+		    }
+		    resolutionManager.addRegion(new RegionDescriptor(xMin, xMax, xyData.resolution));
+		}
             }
             if(up_errorData != null && upError == null)
             {
@@ -2332,7 +2340,7 @@ public class Signal implements WaveDataListener
         }
         if (increasing_x || type == Signal.TYPE_2D)
         {
-            if(currX == null) return -1;
+            if(currX == null || currX.length == 0) return -1;
             if(prev_idx >= currX.length)
                 prev_idx = currX.length - 1;
             if (curr_x > currX[prev_idx])
@@ -2564,7 +2572,8 @@ public class Signal implements WaveDataListener
             actXMax = this.xmax;
  
         /*Enlarge by 1/20 */
-        double enlargeFactor = 40;
+//        double enlargeFactor = 40;
+        double enlargeFactor = 3;
         actXMax += (actXMax - actXMin)/enlargeFactor;
         actXMin -= (actXMax - actXMin)/enlargeFactor;
         
@@ -2764,6 +2773,8 @@ public class Signal implements WaveDataListener
             if(xyData == null) return;
             x = xyData.x;
             y = xyData.y;
+	    if(x == null || x.length == 0) 
+		return;
             adjustArraySizes();
             increasing_x = xyData.increasingX;
             if(increasing_x)

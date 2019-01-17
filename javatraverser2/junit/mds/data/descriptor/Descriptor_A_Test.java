@@ -11,6 +11,7 @@ import mds.Mds;
 import mds.MdsException;
 import mds.data.descriptor_a.Float32Array;
 import mds.data.descriptor_a.Float64Array;
+import mds.data.descriptor_a.Int16Array;
 import mds.data.descriptor_a.Int32Array;
 import mds.data.descriptor_a.Int64Array;
 import mds.data.descriptor_a.Uint64Array;
@@ -18,7 +19,9 @@ import mds.data.descriptor_apd.Dictionary;
 import mds.data.descriptor_apd.List;
 import mds.data.descriptor_r.Function;
 import mds.data.descriptor_r.Signal;
+import mds.data.descriptor_r.function.BINARY.Multiply;
 import mds.data.descriptor_r.function.CONST;
+import mds.data.descriptor_s.Float32;
 import mds.data.descriptor_s.Int32;
 import mds.data.descriptor_s.Int64;
 import mds.data.descriptor_s.Uint8;
@@ -60,7 +63,7 @@ public final class Descriptor_A_Test{
 
     @Test
     public final void testDictionary() throws MdsException {
-        final Signal signal = new Signal(CONST.$VALUE(), new Int32Array(new int[]{2, 2}, 1, 2, 3, 4), new Int32Array(1, 2));
+        final Signal signal = new Signal(CONST.$VALUE, new Int32Array(new int[]{2, 2}, 1, 2, 3, 4), new Int32Array(1, 2));
         final Descriptor<?>[] args = new Descriptor<?>[]{new Uint8(1), new Int64(1), new Uint8(2), signal};
         // HINT: tdi 'Dict' converts keys into int as they can only be native python types
         final Dictionary dict = Descriptor_A_Test.mds.getDescriptor("Dict(*,1BU,1Q,2BU,Build_Signal($VALUE,[[1,2],[3,4]],[1,2]))", Dictionary.class);
@@ -69,6 +72,13 @@ public final class Descriptor_A_Test{
         Assert.assertArrayEquals(dict.serializeArray(), dict2.serializeArray());
         final Dictionary dict3 = new Dictionary(args);
         Assert.assertEquals("[1BU,1Q,2BU,Build_Signal($VALUE, [[1,2],[3,4]], [1,2])]", Descriptor_A_Test.mds.getDescriptor("$", dict3).decompile());
+    }
+
+    @Test
+    public final void testEvaluate() throws MdsException {
+        final Multiply dsc = new Multiply(new Signal(new Int16Array(new short[]{0, 1, 2, 3}), null, new Float32Array(new float[]{0f, 1f, 2f, 3f})), new Float32(.5f));
+        Assert.assertEquals("[0.,.5,1.,1.5]", Descriptor.mdslib.getDescriptor("DATA($)", dsc).toString());
+        Assert.assertTrue(dsc == dsc.getLocal());
     }
 
     @Test
@@ -99,8 +109,8 @@ public final class Descriptor_A_Test{
 
     @Test
     public final void testList() throws MdsException {
-        Assert.assertEquals("[1BU,1Q,2BU,Build_Signal(1, 2, 3)]", Descriptor_A_Test.mds.getDescriptor(List.list + "1BU,1Q,2BU,Build_Signal(1,2,3))").decompile());
-        Assert.assertEquals("[1BU,1Q,2BU,Build_Signal(1, 2, 3)]", Descriptor_A_Test.mds.getDescriptor(List.list + "$,$,$,$)", new Uint8(1), new Int64(1), new Uint8(2), new Signal(new Int32(1), new Int32(2), new Int32(3))).decompile());
+        Assert.assertEquals("[1BU,1Q,2BU,Build_Signal(1, 2, 3)]", Descriptor_A_Test.mds.getDescriptor("List(*,1BU,1Q,2BU,Build_Signal(1,2,3))").decompile());
+        Assert.assertEquals("[1BU,1Q,2BU,Build_Signal(1, 2, 3)]", Descriptor_A_Test.mds.getDescriptor("List(*,$,$,$,$)", new Uint8(1), new Int64(1), new Uint8(2), new Signal(new Int32(1), new Int32(2), new Int32(3))).decompile());
         Assert.assertEquals("[1BU,1Q,2BU,Build_Signal(1, 2, 3)]", Descriptor_A_Test.mds.getDescriptor("EVALUATE($)", new List(new Uint8(1), new Int64(1), new Uint8(2), new Signal(new Int32(1), new Int32(2), new Int32(3)))).decompile());
     }
 }

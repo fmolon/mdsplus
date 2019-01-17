@@ -922,6 +922,7 @@ static struct descriptor *ObjectToDescrip(JNIEnv * env, jobject obj)
       return completeDescr(desc, helpDscPtr, unitsDscPtr, errorDscPtr, validationDscPtr);
     default:
       printf("\nUnsupported type for CLASS_S: %d\n", dtype);
+      return NULL;
     }
     break;
   case CLASS_A:
@@ -1057,7 +1058,7 @@ static struct descriptor *ObjectToDescrip(JNIEnv * env, jobject obj)
 			   validationDscPtr);
     default:
       printf("\nUnsupported type for CLASS_A: %d\n", dtype);
-      break;
+      return NULL;
     }
   case CLASS_R:
 
@@ -1246,7 +1247,7 @@ JNIEXPORT jobject JNICALL Java_MDSplus_Data_compile
   arglist[varIdx++] = &outXd;
   arglist[varIdx++] = MdsEND_ARG;
   *(int *)&arglist[0] = varIdx - 1;
-  status = (char *)LibCallg(arglist, TdiCompile) - (char *)0;
+  status = (int)(intptr_t)LibCallg(arglist, TdiCompile);
   (*env)->ReleaseStringUTFChars(env, jexpr, expr);
   for (i = 0; i < numArgs; i++)
     FreeDescrip(arglist[2 + i]);
@@ -1340,7 +1341,7 @@ JNIEXPORT jobject JNICALL Java_MDSplus_Data_execute
   arglist[varIdx++] = &outXd;
   arglist[varIdx++] = MdsEND_ARG;
   *(int *)&arglist[0] = varIdx - 1;
-  status = (char *)LibCallg(arglist, TdiCompile) - (char *)0;
+  status = (int)(intptr_t)LibCallg(arglist, TdiCompile);
   (*env)->ReleaseStringUTFChars(env, jexpr, expr);
   for (i = 0; i < numArgs; i++)
     FreeDescrip(arglist[2 + i]);
@@ -1857,10 +1858,10 @@ JNIEXPORT jint JNICALL Java_MDSplus_Tree_getCurrent(JNIEnv * env, jclass cls __a
  */
 JNIEXPORT void JNICALL Java_MDSplus_Tree_createPulseFile
 (JNIEnv * env, jclass cls __attribute__ ((unused)), jint ctx1, jint ctx2, jint shot) {
-  int status, retNids;
+  int status;
   void *ctx = getCtx(ctx1, ctx2);
 
-  status = _TreeCreatePulseFile(ctx, shot, 0, &retNids);
+  status = _TreeCreatePulseFile(ctx, shot, 0, NULL);
   if STATUS_NOT_OK
     throwMdsException(env, status);
 }

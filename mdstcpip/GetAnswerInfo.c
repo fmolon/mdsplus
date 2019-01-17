@@ -22,6 +22,9 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+#ifdef DEBUG
+ #include <stdio.h>
+#endif
 #include "mdsip_connections.h"
 #include <stdlib.h>
 #include <status.h>
@@ -59,6 +62,10 @@ int GetAnswerInfoTO(int id, char *dtype, short *length, char *ndims, int *dims, 
   *numbytes = 0;
   Connection* c = FindConnection(id,NULL);
   m = GetMdsMsgTOC(c, &status, timeout_msec);
+  if (!m && status == SsINTERNAL) {
+    DisconnectConnectionC(c);
+    status = MDSplusERROR;
+  }
   UnlockConnection(c);
   if STATUS_NOT_OK {
     *dtype = 0;

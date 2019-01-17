@@ -3,21 +3,24 @@ static int io_disconnect(Connection* c);
 static int io_listen(int argc, char **argv);
 static int io_authorize(Connection* c, char *username);
 static int io_connect(Connection* c, char *protocol, char *host);
-#ifdef _WIN32
-#define io_recv_to NULL
-static ssize_t io_recv(Connection* c, void *buffer, size_t len);
-#else
 static ssize_t io_recv_to(Connection* c, void *buffer, size_t len, int to_msec);
-inline static ssize_t io_recv(Connection* c, void *buffer, size_t len){
+#ifdef _TCP
+static int io_check(Connection* c);
+#else
+# define io_check NULL
+#endif
+static ssize_t io_recv(Connection* c, void *buffer, size_t len){
   return io_recv_to(c, buffer,len, -1);
 }
-#endif
 static IoRoutines io_routines = {
-  io_connect, io_send, io_recv, io_flush, io_listen, io_authorize, io_reuseCheck, io_disconnect, io_recv_to
+  io_connect, io_send, io_recv, io_flush, io_listen, io_authorize, io_reuseCheck, io_disconnect, io_recv_to, io_check
 };
-
-#ifdef _WIN32
- #define close closesocket
+#include <mdsshr.h>
+#include <inttypes.h>
+#ifdef _TCP
+ #ifdef _WIN32
+  #define close closesocket
+ #endif
 #else
  #include <poll.h>
 #endif
@@ -55,9 +58,9 @@ EXPORT IoRoutines *Io(){
 static SOCKET getSocket(Connection* c){
   size_t len;
   char *info_name;
-  int readfd;
+  SOCKET readfd;
   GetConnectionInfoC(c, &info_name, &readfd, &len);
-  return (info_name && strcmp(info_name, PROT) == 0) ? (SOCKET)readfd : (SOCKET)-1;
+  return (info_name && strcmp(info_name, PROT) == 0) ? readfd : INVALID_SOCKET;
 }
 
 static pthread_mutex_t socket_list_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -99,7 +102,7 @@ static void ABORT(int sigval __attribute__ ((unused))){
 static int GetHostAndPort(char *hostin, struct SOCKADDR_IN *sin){
   int status;
   INITIALIZESOCKETS;
-  char *host = strcpy((char *)malloc(strlen(hostin) + 1), hostin);
+  char *host = strdup(hostin);
   FREE_ON_EXIT(host);
   char *service = NULL;
   size_t i;
@@ -137,27 +140,29 @@ static int GetHostAndPort(char *hostin, struct SOCKADDR_IN *sin){
   return status;
 }
 
+#if defined(__MACH__) || defined(_WIN32)
+# define GETHOSTBYADDR
+#endif
 static char *getHostInfo(SOCKET sock, char **iphostptr, char **hostnameptr){
   char *ans = NULL;
   struct SOCKADDR_IN sin;
   SOCKLEN_T len = sizeof(sin);
   if (!GETPEERNAME(sock, (struct sockaddr *)&sin, &len)) {
     GET_IPHOST(sin);
-#if defined(__MACH__) || defined(_WIN32)
+#ifdef GETHOSTBYADDR
     struct hostent* hp = gethostbyaddr((void*)&sin.SIN_ADDR,sizeof(sin.SIN_ADDR),sin.SIN_FAMILY);
 #else
     struct hostent hostbuf, *hp = NULL;
     int herr;
-    char *hp_mem = NULL;
-    FREE_ON_EXIT(hp_mem);
-    size_t memlen;
-    for ( memlen=1024,hp_mem=malloc(memlen); hp_mem && (gethostbyaddr_r((void*)&sin.SIN_ADDR,sizeof(sin.SIN_ADDR),sin.SIN_FAMILY,&hostbuf,hp_mem,memlen,&hp,&herr) == ERANGE); ) {
+    INIT_AND_FREE_ON_EXIT(char*,hp_mem);
+    size_t memlen = 1024;
+    hp_mem = malloc(memlen);
+    while (hp_mem && (gethostbyaddr_r((void*)&sin.SIN_ADDR,sizeof(sin.SIN_ADDR),sin.SIN_FAMILY,&hostbuf,hp_mem,memlen,&hp,&herr) == ERANGE)) {
       memlen *=2;
-#ifdef DEBUG
+# ifdef DEBUG
       fprintf(stderr,"hp_mem too small-> %d\n",(int)memlen);
-#endif
-      free(hp_mem);
-      hp_mem = (char*)malloc(memlen);
+# endif
+      hp_mem = realloc(hp_mem,memlen);
     }
 #endif
     if (hp && hp->h_name) {
@@ -177,7 +182,7 @@ static char *getHostInfo(SOCKET sock, char **iphostptr, char **hostnameptr){
       *iphostptr = (char *)malloc(strlen(iphost) + 1);
       strcpy(*iphostptr, iphost);
     }
-#if !(defined(__MACH__) || defined(_WIN32))
+#ifndef GETHOSTBYADDR
     FREE_NOW(hp_mem);
 #endif
   }
@@ -258,13 +263,11 @@ static int io_authorize(Connection* c, char *username){
   FREE_ON_EXIT(info);
   ans = C_OK;
   SOCKET sock = getSocket(c);
-  time_t tim = time(0);
-  char *timestr = ctime(&tim);
+  char now[32];Now32(now);
   info = getHostInfo(sock, &iphost, &hoststr);
   if (info) {
-    timestr[strlen(timestr) - 1] = 0;
     printf("%s (%d) (pid %d) Connection received from %s@%s\r\n",
-           timestr, (int)sock, getpid(), username, info);
+           now, (int)sock, getpid(), username, info);
     char *matchString[2] = { NULL, NULL };
     FREE_ON_EXIT(matchString[0]);
     FREE_ON_EXIT(matchString[1]);
@@ -282,7 +285,7 @@ static int io_authorize(Connection* c, char *username){
     FREE_NOW(matchString[1]);
     FREE_NOW(matchString[0]);
   } else
-    fprintf(stderr,"error getting hostinfo");
+    PERROR("error getting hostinfo");
   FREE_NOW(info);
   FREE_NOW(iphost);
   FREE_NOW(hoststr);
@@ -308,44 +311,69 @@ static ssize_t io_send(Connection* c, const void *bptr, size_t num, int nowait){
 //  RECEIVE  ///////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifdef _WIN32
-static ssize_t io_recv(Connection* c, void *bptr, size_t num){
-#else
 static ssize_t io_recv_to(Connection* c, void *bptr, size_t num, int to_msec){
-#endif
   SOCKET sock = getSocket(c);
   ssize_t recved = -1;
   if (sock != INVALID_SOCKET) {
     PushSocket(sock);
     signal(SIGABRT, ABORT);
-    struct SOCKADDR_IN sin;
-    SOCKLEN_T len = sizeof(sin);
-    if (GETPEERNAME(sock, (struct sockaddr *)&sin, &len))
-      PERROR("Error getting peer name from socket");
-    else
-#ifdef _WIN32
-      recved = RECV(sock, bptr, num, MSG_NOSIGNAL);
-#else
     if (to_msec<0)
       recved = RECV(sock, bptr, num, MSG_NOSIGNAL);
     else {
+#ifdef _TCP
+      struct timeval timeout;
+      timeout.tv_sec  = to_msec/1000;
+      timeout.tv_usec = (to_msec%1000)*1000;
+      fd_set readfds;
+      FD_ZERO(&readfds);
+      FD_SET(sock, &readfds);
+      recved = select(sock+1, &readfds, NULL, NULL, &timeout);
+#else
       struct pollfd fd;
-      fd.fd = sock; // your socket handler
+      fd.fd = sock;
       fd.events = POLLIN;
-      recved = poll(&fd, 1, to_msec); // 1 second for timeout
+      recved = poll(&fd, 1, to_msec);
+#endif
       switch (recved) {
       case -1: break; // Error
       case  0: break; // Timeout
-      default:
-        recved = RECV(sock, bptr, num, MSG_NOSIGNAL); // get your data
+      default: // for select this will be 1
+        recved = RECV(sock, bptr, num, MSG_NOSIGNAL);
         break;
       }
     }
-#endif
     PopSocket(sock);
   }
   return recved;
 }
+
+#ifdef _TCP
+static int io_check(Connection* c){
+  SOCKET sock = getSocket(c);
+  ssize_t err = -1;
+  if (sock != INVALID_SOCKET) {
+    PushSocket(sock);
+    signal(SIGABRT, ABORT);
+    struct timeval timeout = {0,0};
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(sock, &readfds);
+    err = select(sock+1, &readfds, NULL, NULL, &timeout);
+    switch (err) {
+    case -1: break; // Error
+    case  0: break; // Timeout
+    default: {// for select this will be 1
+        char bptr[1];
+        err = RECV(sock, bptr, 1, MSG_NOSIGNAL||MSG_PEEK);
+        err = (err==1) ? 0 : -1;
+        break;
+      }
+    }
+    PopSocket(sock);
+  }
+  return (int)err;
+}
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 //  DISCONNECT  ////////////////////////////////////////////////////////////////
@@ -354,8 +382,7 @@ static ssize_t io_recv_to(Connection* c, void *bptr, size_t num, int to_msec){
 static int io_disconnect(Connection* con){
   SOCKET sock = getSocket(con);
   int err = C_OK;
-  time_t tim = time(0);
-  char *timestr = ctime(&tim);
+  char now[32];Now32(now);
   if (sock != INVALID_SOCKET) {
     Client *c, **p;
     for (p = &ClientList, c = ClientList; c && c->id != con->id; p = &c->next, c = c->next) ;
@@ -368,9 +395,8 @@ static int io_disconnect(Connection* con){
       if (server_epoll != -1) {
 	udt_epoll_remove_usock(server_epoll, sock);
 #endif
-        timestr[strlen(timestr) - 1] = 0;
         printf("%s (%d) (pid %d) Connection disconnected from %s@%s [%s]\r\n",
-               timestr, (int)sock, getpid(),
+               now, (int)sock, getpid(),
                c->username ? c->username : "?",
                c->host     ? c->host     : "?",
                c->iphost   ? c->iphost   : "?");
@@ -392,9 +418,9 @@ static int io_disconnect(Connection* con){
 
 
 #ifdef _WIN32
-void runServerMode(Options *options){
+int runServerMode(Options *options){
 #else
-void runServerMode(Options *options  __attribute__((unused))){
+int runServerMode(Options *options  __attribute__((unused))){
 #endif
   //////////////////////////////////////////////////////////////////////////
   // SERVER MODE                                ////////////////////////////
@@ -404,23 +430,24 @@ void runServerMode(Options *options  __attribute__((unused))){
 #else
     SOCKET sock = 0;
 #endif
-    int id;
-    char *username;
-    if IS_OK(AcceptConnection(PROT, PROT, sock, 0, 0, &id, &username)) {
-      struct SOCKADDR_IN sin;
-      SOCKLEN_T len = sizeof(sin);
-      if (GETPEERNAME(sock, (struct sockaddr *)&sin, &len) == 0)
-        MdsSetClientAddr(((struct sockaddr_in*)&sin)->sin_addr.s_addr);
-      Client *client = memset(malloc(sizeof(Client)), 0, sizeof(Client));
-      client->id = id;
-      client->sock = sock;
-      client->next = ClientList;
-      client->username = username;
-      client->host = getHostInfo(sock, &client->iphost, NULL);
-      ClientList = client;
+  int id;
+  char *username;
+  if IS_NOT_OK(AcceptConnection(PROT, PROT, sock, 0, 0, &id, &username))
+    return C_ERROR;
+  struct SOCKADDR_IN sin;
+  SOCKLEN_T len = sizeof(sin);
+  if (GETPEERNAME(sock, (struct sockaddr *)&sin, &len) == 0)
+    MdsSetClientAddr(((struct sockaddr_in*)&sin)->sin_addr.s_addr);
+  Client *client = memset(malloc(sizeof(Client)), 0, sizeof(Client));
+  client->id = id;
+  client->sock = sock;
+  client->next = ClientList;
+  client->username = username;
+  client->host = getHostInfo(sock, &client->iphost, NULL);
+  ClientList = client;
 #ifdef _TCP
-      FD_SET(sock, &fdactive);
+  FD_SET(sock, &fdactive);
 #endif
-      while IS_OK(DoMessage(id));
-    }
+  while (DoMessage(id));
+  return C_ERROR;
 }

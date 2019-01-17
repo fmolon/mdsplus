@@ -58,6 +58,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <tdishr_messages.h>
 #include <mdsshr.h>
 extern int mdsdcl_do_command();
+#if defined __GNUC__ && 800 <= __GNUC__ * 100 + __GNUC_MINOR__
+    _Pragma ("GCC diagnostic ignored \"-Wcast-function-type\"")
+#endif
 /*
  * Standard includes for builtins.
  */
@@ -715,15 +718,12 @@ static void TCLOutput(char *text)
 
 static void InitializeCommandInterface(Widget w)
 {
-  static DESCRIPTOR(const image_name, "tcl_commands");
-  static DESCRIPTOR(const routine_name, "TclSetCallbacks");
   int status = mdsdcl_do_command("set command tcl");
   if (status & 1) {
-    int (*set_callbacks) ();
-    status = LibFindImageSymbol(&image_name, &routine_name, &set_callbacks);
-    if (status & 1) {
+    int (*set_callbacks) () = NULL;
+    status = LibFindImageSymbol_C("tcl_commands", "TclSetCallbacks", &set_callbacks);
+    if (status & 1)
       status = set_callbacks(TCLOutput, TCLOutput, NodeTouched);
-    }
   }
   toplevel = BxFindTopShell(w);
 }

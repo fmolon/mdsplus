@@ -369,7 +369,6 @@ then
 else
   MAKEFLAG_J="-j -l 1"
 fi
-DEF_PYLIB=$(ldd $(which python) | grep libpython | awk '{print $3}')
 MAKEFLAG_O="$(if ${MAKE:=make} -v -O&>/dev/null; then echo -O; fi)"
 MAKEUIDDIR="\$(top_builddir)/uid/"
 MAKESHLIBDIR="\$(top_builddir)/lib/"
@@ -392,7 +391,7 @@ case "$host" in
        MAKEFLAG_O=""
        IDLMDSEVENT=""
        LIBPRE=""
-       CFLAGS="$CFLAGS -fno-strict-aliasing -mno-ms-bitfields ";
+       CFLAGS="$CFLAGS -fno-strict-aliasing -mno-ms-bitfields -DWIN32 -D_WIN32 ";
        LD="$CXX -static-libgcc"
        FCFLAGS="$FCFLAGS -fno-range-check"
        FORLD="$FC"
@@ -423,7 +422,7 @@ case "$host" in
        FEXECLIBDIR="-L";
        SHARETYPE=".dll"
        jni_inc_dir="$with_jdk/include";
-       jni_md_inc_dir="$with_jdk/include/linux";;
+       jni_md_inc_dir="$with_jdk/include/win32";;
 
 *86*linux*)
        CFLAGS="$CFLAGS -fpic -shared-libgcc -fsigned-char -fno-strict-aliasing ";
@@ -717,6 +716,19 @@ dnl AC_CHECK_HEADERS(readline/readline.h readline/history.h)
 
 
 ## ////////////////////////////////////////////////////////////////////////// ##
+## //  LIBLZMA  ///////////////////////////////////////////////////////////// ##
+## ////////////////////////////////////////////////////////////////////////// ##
+AC_CHECK_LIB(lzma,lzma_code,LIBLZMA_SETTING=yes,LIBLZMA_SETTING=no,)
+AC_CHECK_HEADERS(lzma.h)
+if test "$LIBLZMA_SETTING" = "yes" -a "$ac_cv_header_lzma_h" = "yes" ; then
+ LIBLZMA="-llzma"
+else
+ LIBLZMA_SETTING=no
+fi
+AC_SUBST(LIBLZMA)
+
+
+## ////////////////////////////////////////////////////////////////////////// ##
 ## //  LIBXML  ////////////////////////////////////////////////////////////// ##
 ## ////////////////////////////////////////////////////////////////////////// ##
 
@@ -732,7 +744,7 @@ AC_SUBST(XML_LIBS)
 AM_CONDITIONAL(XML, test x"$have_xml" = x"yes")
 
 if test "x$have_xml" = "xyes"; then
- dnl test also for headers usability required by mdsdcl
+ dnl test also for headers usability required by mdsdcl and mdsshr
  CPPFLAGS_save="$CPPFLAGS"
  CPPFLAGS="$XML_CPPFLAGS $CPPFLAGS $TARGET_ARCH"
  AC_CHECK_HEADERS(libxml/tree.h libxml/parser.h libxml/xpath.h libxml/xpathInternals.h
@@ -976,19 +988,15 @@ MDS_SEARCH_LIBS([XpGetDocumentData],[Xp],[AS_VAR_SET([LIBXP],[$ac_cv_search_XpGe
 ## //  PYTHON   ///////////////////////////////////////////////////////////// ##
 ## ////////////////////////////////////////////////////////////////////////// ##
 
-## TODO: Add version here
-
-dnl Find a Python2 interpreter.  Python versions prior to 2.0 are not
-dnl supported. (2.0 was released on October 16, 2000).
-m4_define([_AM_PYTHON_INTERPRETER_LIST],
-	  [python2.7 python2.6 python2.5 python2.4 python2.3 python2.2 python2.1 python2.0 python2])
-AM_PATH_PYTHON([2],,[:])
+dnl Find a Python interpreter.  Python versions prior to 2.6 are not
+dnl supported.
+AX_PATH_PYTHON([2.6],[$host],,[:])
 AM_CONDITIONAL([HAVE_PYTHON], [test "$PYTHON" != :])
-
 AX_PYTHON_ARCH(PYTHON_ARCHITECTURE)
 AC_SUBST(PYTHON_ARCHITECTURE)
-
-
+AC_MSG_CHECKING(libpython path)
+DEF_PYLIB=$(ldd $PYTHON | grep libpython | awk '{print $3}')
+AC_MSG_RESULT($DEF_PYLIB)
 ## ////////////////////////////////////////////////////////////////////////// ##
 ## //  TESTS    ///////////////////////////////////////////////////////////// ##
 ## ////////////////////////////////////////////////////////////////////////// ##
@@ -1143,7 +1151,7 @@ AC_ARG_ENABLE([werror],
               [],
               [AS_VAR_SET([enable_werror], [no])])
 AS_CASE([$enable_werror],
-        [yes], [AS_VAR_APPEND([WARNFLAGS], [" -Werror "])],
+        [yes], [AS_VAR_APPEND([WARNFLAGS], [" -Werror"])],
         [])
 AC_ARG_ENABLE([wreturns],
               [AS_HELP_STRING([--disable-wreturns],
@@ -1332,7 +1340,6 @@ AC_OUTPUT(Makefile.inc
           macosx/Makefile
           math/Makefile
           mdsdcl/Makefile
-	  mdsdcl/mdsdcl_show_version.c
           mdslib/Makefile
           mdslib/docs/Makefile
           mdslib/testing/Makefile
@@ -1349,6 +1356,7 @@ AC_OUTPUT(Makefile.inc
           mdsobjects/labview/Makefile
           mdsmisc/Makefile
           mdsshr/Makefile
+	  mdsshr/MdsVersionInfo.c
           mdsshr/testing/Makefile
 	  mdsshr/docs/Makefile
           mdssql/Makefile

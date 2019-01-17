@@ -67,8 +67,33 @@ try:
     release_tag=_mvers.release_tag
     del _mvers
 except:
+    import os
+    print("PYTHONPATH was set to: %s and unable to import version information" % os.environ['PYTHONPATH'])
     __version__='Unknown'
 
+import sys,ctypes as _C
+class MDSplusVersionInfo(_C.Structure):
+    _fields_= [("MAJOR",_C.c_char_p),
+               ("MINOR",_C.c_char_p),
+               ("RELEASE",_C.c_char_p),
+               ("BRANCH",_C.c_char_p),
+               ("RELEASE_TAG",_C.c_char_p),
+               ("COMMIT",_C.c_char_p),
+               ("DATE",_C.c_char_p),
+               ("MDSVERSION",_C.c_char_p)]
+_ver=_mimport('version')
+mdsshr=_ver.load_library('MdsShr')
+del _ver
+_info=_C.cast(mdsshr.MDSplusVersion,_C.POINTER(MDSplusVersionInfo)).contents
+del mdsshr
+_ver=str(_info.MDSVERSION.decode())
+if _ver != __version__:
+    sys.stderr.write("""Warning:
+  The MDSplus python module version (%s) does not match
+  the version of the installed MDSplus libraries (%s).
+  Upgrade the module using the mdsplus/mdsobjects/python directory of the
+  MDSplus installation.
+""" % (__version__, _ver ))
 
 def load(gbls=globals()):
     def loadmod_full(name,gbls):
@@ -88,7 +113,8 @@ if __name__==__package__:
         from ctypes.util import find_library
         import sys
         libname = ('python%d%d' if sys.platform.startswith('win') else 'python%d.%d')%sys.version_info[0:2]
-        return find_library(libname)
+        try:   return find_library(libname)
+        except:return None
     if not "PyLib" in globals():
         PyLib = getPyLib()
         if   PyLib:globals()['setenv']("PyLib",PyLib)

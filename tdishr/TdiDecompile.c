@@ -37,6 +37,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define TdiDECOMPILE_MAX TdiThreadStatic_p->TdiDecompile_max
 
 extern unsigned short OpcDecompile;
+extern unsigned short OpcEvaluate;
 
 #include "tdirefcat.h"
 #include "tdirefstandard.h"
@@ -59,13 +60,12 @@ extern int TdiGetLong();
 extern int TdiDecompileDeindent();
 extern int Tdi0Decompile_R();
 extern int TdiConvert();
-extern int TdiEvaluate();
+extern int Tdi1Evaluate();
 extern int TdiTrace();
 
 int Tdi0Decompile(struct descriptor *in_ptr, int prec, struct descriptor_d *out_ptr);
 
-int Tdi1Decompile(int opcode __attribute__ ((unused)), int narg, struct descriptor *list[], struct descriptor_xd *out_ptr)
-{
+EXPORT int Tdi1Decompile(int opcode __attribute__ ((unused)), int narg, struct descriptor *list[], struct descriptor_xd *out_ptr){
   INIT_STATUS;
   GET_TDITHREADSTATIC_P;
   struct descriptor_d answer = { 0, DTYPE_T, CLASS_D, 0 };
@@ -209,7 +209,7 @@ STATIC_ROUTINE int closeup(char repl, struct descriptor *pfloat, struct descript
   char *plim = pwas + pdc->length;
   char *pdec, *plast, *pexp, *ppass;
 
-  status = TdiConvert(pfloat, pdc MDS_END_ARG);
+  status = TdiConvert(pfloat, pdc);
   if STATUS_NOT_OK
     return status;
 
@@ -487,7 +487,7 @@ int Tdi0Decompile(struct descriptor *in_ptr, int prec, struct descriptor_d *out_
 
     case DTYPE_L:
       /*cdsc.length = 11; */
-      status = TdiConvert(in_ptr, &cdsc MDS_END_ARG);
+      status = TdiConvert(in_ptr, &cdsc);
       if STATUS_OK
 	status = noblanks(&cdsc);
       if STATUS_OK
@@ -502,17 +502,15 @@ int Tdi0Decompile(struct descriptor *in_ptr, int prec, struct descriptor_d *out_
     case DTYPE_QU:
     case DTYPE_O:
     case DTYPE_OU:
-      cdsc.length = (unsigned short)(in_ptr->length * 2.4 + 1.6);
-      status = TdiConvert(in_ptr, &cdsc MDS_END_ARG);
+      cdsc.length = (unsigned short)(TdiREF_CAT[dtype].digits);
+      status = TdiConvert(in_ptr, &cdsc);
       if STATUS_OK
 	status = noblanks(&cdsc);
       if STATUS_OK {
 	struct descriptor sdsc = { 0, DTYPE_T, CLASS_S, 0 };
 	sdsc.length = (unsigned short)strlen(TdiREF_CAT[dtype].name);
 	sdsc.pointer = TdiREF_CAT[dtype].name;
-	status =
-	    StrConcat((struct descriptor *)out_ptr,
-		      (struct descriptor *)out_ptr, &cdsc, &sdsc MDS_END_ARG);
+	status = StrConcat((struct descriptor *)out_ptr,(struct descriptor *)out_ptr, &cdsc, &sdsc MDS_END_ARG);
       }
       break;
     case DTYPE_D:
@@ -521,7 +519,7 @@ int Tdi0Decompile(struct descriptor *in_ptr, int prec, struct descriptor_d *out_
     case DTYPE_H:
     case DTYPE_FS:
     case DTYPE_FT:
-      cdsc.length = (unsigned short)((in_ptr->length - 1) * 8 * .30103 + 6.8);
+      cdsc.length = (unsigned short)(TdiREF_CAT[dtype].digits);
       status = closeup((char)TdiREF_CAT[dtype].fname[0], in_ptr, &cdsc);
       if STATUS_OK
 	status = StrAppend(out_ptr, (struct descriptor *)&cdsc);
@@ -651,7 +649,7 @@ int Tdi0Decompile(struct descriptor *in_ptr, int prec, struct descriptor_d *out_
   case CLASS_CA:
     {
       struct descriptor_xd tmp = EMPTY_XD;
-      status = TdiEvaluate(in_ptr, &tmp MDS_END_ARG);
+      status = Tdi1Evaluate(OpcEvaluate, 1, &in_ptr, &tmp);
       if STATUS_OK
 	status = Tdi0Decompile(tmp.pointer, prec, out_ptr);
       MdsFree1Dx(&tmp, NULL);

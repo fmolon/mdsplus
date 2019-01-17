@@ -60,12 +60,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         Ken Klare, LANL P-4     (c)1989,1990,1991,1992
         NEED subscripted assignment.
 */
-#define DEF_FREED
-
 #include <mdsplus/mdsconfig.h>
 #include "STATICdef.h"
-#define DEF_FREEXD
-#define DEF_FREED
 #include "tdithreadsafe.h"
 #include "tdirefstandard.h"
 #include "tdishrp.h"
@@ -79,9 +75,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <mdsshr.h>
 #include <string.h>
+#include <inttypes.h>
 #include <mdsshr_messages.h>
 
 // #define DEBUG
+#ifdef DEBUG
+# define DBG(...) do{fprintf(stderr,__VA_ARGS__);fprintf(stdout,__VA_ARGS__);}while(0)
+#else
+# define DBG(...) {}
+#endif
 
 extern unsigned short OpcEquals, OpcEqualsFirst;
 extern unsigned short OpcFun;
@@ -642,7 +644,8 @@ int compile_fun(struct descriptor *entry)
 }
 
 extern char* findModule();
-extern int TdiExtPython2();
+extern int loadPyFunction(char*dirspec,char*filename);
+extern int callPyFunction(char*filename,int nargs,struct descriptor_r **args,struct descriptor_xd *out_ptr);
 int TdiDoFun(struct descriptor *ident_ptr,
 	     int nactual, struct descriptor_r *actual_arg_ptr[], struct descriptor_xd *out_ptr)
 {
@@ -651,43 +654,52 @@ int TdiDoFun(struct descriptor *ident_ptr,
         Get name of function to do. Check its type.
         ******************************************/
   static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-  int status, ispython;
-  char *filename = NULL, *dirspec = NULL;
-  FREE_ON_EXIT(filename);
-  FREE_ON_EXIT(dirspec);
+  int status;
   // look up method: check cached, check python, or load
   pthread_mutex_lock(&lock);
   pthread_cleanup_push((void*)pthread_mutex_unlock,&lock);
-  ispython = B_FALSE;
   status = TdiFindIdent(7, (struct descriptor_r *)ident_ptr, 0, &node_ptr, 0);
   if (status==TdiUNKNOWN_VAR) {
+    char *filename = NULL, *dirspec = NULL;
+    FREE_ON_EXIT(filename);
+    FREE_ON_EXIT(dirspec);
     // check if method is python
     dirspec = findModule(ident_ptr,&filename);
-    if (dirspec)
-      ispython = B_TRUE;
-    else { // not a python method, load tdi fun
+    if (dirspec) {
+      status = loadPyFunction(dirspec,filename);
+      if STATUS_OK {
+        struct descriptor function = {(short)strlen(filename),DTYPE_T,CLASS_S,filename};
+        struct descriptor_xd tmp = EMPTY_XD;
+        status = MdsCopyDxXd((struct descriptor *)&function, &tmp);
+        if STATUS_OK {
+          status = TdiPutIdent((struct descriptor_r *)ident_ptr, &tmp);
+          MdsFree1Dx(&tmp, NULL);
+        }
+      }
+      if STATUS_NOT_OK // unable to load python method try tdi alternative
+	status = compile_fun(ident_ptr);
+    } else // not a python method, load tdi fun
       status = compile_fun(ident_ptr);
-      if STATUS_OK
-        status = TdiFindIdent(7, (struct descriptor_r *)ident_ptr, 0, &node_ptr, 0);
-    }
+    FREE_NOW(dirspec);
+    FREE_NOW(filename);
+    if STATUS_OK status = TdiFindIdent(7, (struct descriptor_r *)ident_ptr, 0, &node_ptr, 0);
   }
   pthread_cleanup_pop(1);
-  // method is loaded or python at this point
-  if (ispython) // execute python method if special flag is set
-    status = TdiExtPython2(dirspec, filename, nactual, (struct descriptor **)actual_arg_ptr, out_ptr);
-  FREE_NOW(dirspec);
-  FREE_NOW(filename);
-  if (ispython || STATUS_NOT_OK)
-    return status;
+  if STATUS_NOT_OK return status;
   struct descriptor_r *formal_ptr = 0, *formal_arg_ptr, *actual_ptr;
+  if ((formal_ptr = (struct descriptor_r *)node_ptr->xd.pointer) == 0) return TdiUNKNOWN_VAR;
+  if (formal_ptr->dtype == DTYPE_T) {
+    char *funname = malloc(formal_ptr->length+1);
+    FREE_ON_EXIT(funname);
+    memcpy(funname,formal_ptr->pointer,formal_ptr->length);funname[formal_ptr->length]='\0';
+    status = callPyFunction(funname,nactual,actual_arg_ptr,out_ptr);
+    FREE_NOW(funname);
+    return status;
+  }
+  if (formal_ptr->dtype != DTYPE_FUNCTION || *(unsigned short *)formal_ptr->pointer != OpcFun) return TdiUNKNOWN_VAR;
   int code, opt, j, nformal = 0;
-  if ((formal_ptr = (struct descriptor_r *)node_ptr->xd.pointer) == 0
-     || formal_ptr->dtype != DTYPE_FUNCTION
-     || *(unsigned short *)formal_ptr->pointer != OpcFun)
-    return TdiUNKNOWN_VAR;
   if ((nformal = formal_ptr->ndesc - 2) < nactual)
     return TdiEXTRA_ARG;
-
   GET_TDITHREADSTATIC_P;
   struct descriptor_xd tmp = EMPTY_XD;
   node_type *old_head, *new_head = 0;
@@ -1062,14 +1074,14 @@ STATIC_ROUTINE int show_one(node_type * node_ptr, user_type * user_ptr)
 */
 int Tdi1ShowPrivate(int opcode __attribute__ ((unused)), int narg, struct descriptor *list[], struct descriptor_xd *out_ptr){
   GET_TDITHREADSTATIC_P;
+  DBG("TdiShowPrivate: %"PRIxPTR"\n",(uintptr_t)(void*)_private.head);
   return wild((int (*)())show_one, narg, list, &_private, out_ptr);
 }
 
 /*--------------------------------------------------------------
         Display public variables.
 */
-int Tdi1ShowPublic(int opcode __attribute__ ((unused)), int narg, struct descriptor *list[], struct descriptor_xd *out_ptr)
-{
+int Tdi1ShowPublic(int opcode __attribute__ ((unused)), int narg, struct descriptor *list[], struct descriptor_xd *out_ptr){
   int status;
   LOCK_PUBLIC_PUSH;
   status = wild((int (*)())show_one, narg, list, &_public, out_ptr);
@@ -1087,11 +1099,11 @@ extern EXPORT int TdiSaveContext(void *ptr[6]){
   ptr[4] = _public.head_zone;
   ptr[5] = _public.data_zone;
   UNLOCK_PUBLIC;
+  DBG("TdiSaveContext: %"PRIxPTR"\n",(uintptr_t)ptr[0]);
   return 1;
 }
 
-extern EXPORT int TdiDeleteContext(void *ptr[6])
-{
+extern EXPORT int TdiDeleteContext(void *ptr[6]){
   if (ptr[1])
     LibDeleteVmZone(&ptr[1]);
   if (ptr[2])
@@ -1112,6 +1124,7 @@ extern EXPORT int TdiDeleteContext(void *ptr[6])
 */
 extern EXPORT int TdiRestoreContext(void *ptr[6]){
   GET_TDITHREADSTATIC_P;
+  DBG("TdiRestoreContext: %"PRIxPTR"\n",(uintptr_t)ptr[0]);
   _private.head = (node_type *) ptr[0];
   _private.head_zone = ptr[1];
   _private.data_zone = ptr[2];

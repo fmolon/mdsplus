@@ -105,22 +105,13 @@ class NI6259AI(Device):
 #    AI_START_SELECT_RTSI0 = c_int(11)
 #    AI_START_SELECT_RTSI1 = c_int(12)
 
-#Codac Core 5.0
-#    AI_START_SELECT = c_int(10)
-#    AI_START_POLARITY = c_int(11)
-
-#Codac Core 6.0
-    AI_START_SELECT = c_int(11)
-    AI_START_POLARITY = c_int(12)
-
+    AI_START_SELECT = c_int(9)
+    AI_START_POLARITY = c_int(10)
     AI_START_POLARITY_RISING_EDGE = c_int(0)
     AI_REFERENCE_SELECT_PULSE  = c_int(0)
     AI_REFERENCE_SELECT_PFI1 = c_int(2)
-
-
- #Codac Core 5.0
-    AI_REFERENCE_SELECT = c_int(12)
-    AI_REFERENCE_POLARITY = c_int(13)
+    AI_REFERENCE_SELECT = c_int(11)
+    AI_REFERENCE_POLARITY = c_int(12)
     AI_REFERENCE_POLARITY_RISING_EDGE = c_int(0)
     PXI6259_AI_START_TRIGGER = c_int(3)
     PXI6259_RTSI1 = c_int(3)
@@ -139,19 +130,6 @@ class NI6259AI(Device):
     niInterfaceLib = None
     ni6259Fds = {}
     workers = {}
-
-    DEV_IS_OPEN = 1
-    DEV_OPEN = 2
-
-
-    def debugPrint(self, msg="", obj=""):
-          msger=""
-          if NI6259AI.niInterfaceLib is not None:
-              errno = NI6259AI.niInterfaceLib.getErrno();
-              print "erno ", errno
-              if errno is not None:
-                  msger = 'Error (%d) %s' % (errno, os.strerror( errno ))
-          print( self.name + ":" + msg, obj, msger );
 
 #saveInfo and restoreInfo allow to handle open file descriptors
     def saveInfo(self):
@@ -389,18 +367,7 @@ class NI6259AI(Device):
 
         self.debugPrint('================= 11 PXI 6259 Init ===============')
 
-
-#Module in acquisition check
-        if self.restoreInfo() == self.DEV_IS_OPEN :
-            try:
-               self.restoreWorker()
-               if self.worker.isAlive():
-                  print 'stop Store'
-                  self.stop_store()
-               self.restoreInfo()
-            except:
-               pass
-
+        self.restoreInfo()
         aiConf = c_void_p(0)
         NI6259AI.niInterfaceLib.pxi6259_create_ai_conf_ptr(byref(aiConf))
         try:
@@ -488,9 +455,11 @@ class NI6259AI(Device):
                         Data.execute('DevLogErr($1,$2)', self.getNid(), 'Cannot set external trigger')
                         raise mdsExceptions.TclFAILED_ESSENTIAL
                     """
-                    if( trigMode == 'EXTERNAL_PFI1' or trigMode == 'EXT_PFI1_R_RTSI1' ):
-                        status = NI6259AI.niLib.pxi6259_set_ai_attribute(aiConf, self.AI_START_SELECT, self.AI_START_SELECT_PFI1)
-                        self.debugPrint('AI_START_SELECT_PFI1 %d'%(status) ) 
+                    # Sostituzione temporanea per gestire acquisizione a IPP trigger preso dal 6368
+                    # status = niLib.pxi6259_set_ai_attribute(aiConf, self.AI_START_SELECT, self.AI_START_SELECT_PFI1)
+
+                    if( trigMode == 'EXTERNAL_PFI1' ):
+                         status = NI6259AI.niLib.pxi6259_set_ai_attribute(aiConf, self.AI_START_SELECT, self.AI_START_SELECT_PFI1)
                     else:
                         self.debugPrint("1 OK AI_START_SELECT_RTSI1")
                         status = NI6259AI.niLib.pxi6259_set_ai_attribute(aiConf, self.AI_START_SELECT, self.AI_START_SELECT_RTSI1)
@@ -726,23 +695,7 @@ class NI6259AI(Device):
 
 ##########StartStore
     def start_store(self):
-
-        self.debugPrint('================= PXI 6259 start store ===============')
-
-        if self.restoreInfo() != self.DEV_IS_OPEN :
-            Data.execute('DevLogErr($1,$2)', self.getNid(), 'Module not Initialized')
-            raise mdsExceptions.TclFAILED_ESSENTIAL
-
-#Module in acquisition check
-        try:
-            self.restoreWorker()
-            if self.worker.isAlive():
-               Data.execute('DevLogErr($1,$2)', self.getNid(), 'Module is in acquisition')
-               return
-        except:
-               pass
-
-
+        self.restoreInfo()
         self.worker = self.AsynchStore()
         self.worker.daemon = True
         self.worker.stopReq = False

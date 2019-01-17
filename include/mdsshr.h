@@ -7,7 +7,7 @@
 #include <mdsdescrip.h>
 #include <mdstypes.h>
 #include <stdio.h>
-
+#include <usagedef.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -108,26 +108,44 @@ extern int MDSEventAst(const char *eventName, void (*astadr) (void *, int, char 
 extern int MDSEventCan(int eventid);
 extern int MDSWfevent(const char *evname, int buflen, char *data, int *datlen);
 extern int MDSWfeventTimed(const char *evname, int buflen, char *data, int *datlen, int timeout);
-extern char *MdsDtypeString(const unsigned char id);
-extern char *MdsClassString(const unsigned char id);
+extern char *MdsDtypeString(const dtype_t id);
+extern char *MdsClassString(const class_t id);
+extern char *MdsUsageString(const usage_t id);
 extern int MDSprintf(const char *fmt, ...);
-extern char *MdsUsageString(const unsigned char id);
 extern char *TranslateLogical(const char *name);
 extern void TranslateLogicalFree(char *value);
 extern int TranslateLogicalXd(const struct descriptor *in, struct descriptor_xd *out);
 extern const char *MdsRelease();
 extern struct descriptor *MdsReleaseDsc();
-extern void MdsFloatToTime(const double floatTime, int64_t * outTime);
-extern void MdsFloatToDelta(const double floatTime, int64_t * outTime);
-extern void MdsTimeToFloat(const int64_t inTime, float *outFloat);
-extern void MdsTimeToDouble(const int64_t inTime, double *outFloat);
 extern int MdsPutEnv(const char *cmd);
 extern void MdsGlobalLock();
 extern void MdsGlobalUnlock();
-extern int MdsXpand(int *nitems_ptr, struct descriptor_a *pack_dsc_ptr, struct descriptor_a *items_dsc_ptr,
-                     int *bit_ptr);
+extern int MdsXpand(int *nitems_ptr, struct descriptor_a *pack_dsc_ptr, struct descriptor_a *items_dsc_ptr, int *bit_ptr);
+extern char* Now32(char* buf);
 
+typedef struct {
+  const char *MAJOR;
+  const char *MINOR;
+  const char *RELEASE;
+  const char *BRANCH;
+  const char *RELEASE_TAG;
+  const char *COMMIT;
+  const char *DATE;
+  const char *MDSVERSION;
+} MDSplusVersionInfo;
 
+#ifdef HAVE_PTHREAD_H
+#include <pthread.h>
+// FREEXD
+static void __attribute__((unused)) free_xd(void *ptr){
+  MdsFree1Dx((struct descriptor_xd*)ptr, NULL);
+}
+#define FREEXD_ON_EXIT(ptr) pthread_cleanup_push(free_xd, ptr)
+#define FREEXD_IF(ptr,c)    pthread_cleanup_pop(c)
+#define FREEXD_NOW(ptr)     FREEXD_IF(ptr,1)
+#define FREEXD_CANCEL(ptr)  FREEXD_IF(ptr,0)
+#define INIT_AND_FREEXD_ON_EXIT(xd) EMPTYXD(xd);FREEXD_ON_EXIT(&xd)
+#endif
 
 #ifdef __cplusplus
 }

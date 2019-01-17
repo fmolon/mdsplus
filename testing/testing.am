@@ -1,4 +1,5 @@
 
+
 # //////////////////////////////////////////////////////////////////////////// #
 # ///  TESTS SECTION   /////////////////////////////////////////////////////// #
 # //////////////////////////////////////////////////////////////////////////// #
@@ -29,15 +30,14 @@ SUFFIXES = .log .tap .xml
 rebuild-tests:
 	@ \
 	if [ -n "$(check_PROGRAMS)" ]; then \
-	 echo "//// Rebuilding tests ////"; \
-	 rm -f *.$(OBJEXT); \
-	 rm -f $(check_PROGRAMS); \
 	 if [ -n "$${VALGRIND_BUILD}" ]; then \
-	  $(MAKE) -k $(AM_MAKEFLAGS) $(BUILD_FLAGS) all ||:; \
+          if [   -f testing ]; then $(MAKE) clean; fi; \
+          $(MAKE) -k $(AM_MAKEFLAGS) $(BUILD_FLAGS) all; \
 	 else \
-	  $(MAKE) -k $(AM_MAKEFLAGS) $(BUILD_FLAGS) all \
-	  CFLAGS="${CFLAGS} -D_TESTING" CPPFLAGS="${CPPFLAGS} -D_TESTING" ||:; \
-	 fi; \
+          if [ ! -f testing ]; then $(MAKE) clean; fi; \
+          $(MAKE) -k $(AM_MAKEFLAGS) $(BUILD_FLAGS) all \
+           CFLAGS="${CFLAGS} -D_TESTING" CPPFLAGS="${CPPFLAGS} -D_TESTING" && touch testing; \
+	 fi;\
 	fi
 
 .PHONY: tests
@@ -69,7 +69,7 @@ if ENABLE_SANITIZE
   # // sanitizer options specific (overload this in your Makefile.am) //
   LSAN_OPTIONS       ?=
   ASAN_OPTIONS       ?=
-  TSAN_OPTIONS       ?=
+  TSAN_OPTIONS       ?= second_deadlock_stack=1
   UBSAN_OPTIONS      ?=
 
   # // suppressions files (overload this in your Makefile.am) //
@@ -211,12 +211,12 @@ $(TEST_LOGS:.log=.xml):
 
 .PHONY: clean-local-tests
 clean-local-tests:
+	-$(RM) -f testing
 	-$(RM) -rf $(TEST_BUILD_TAP)
 	-$(RM) -rf $(TEST_SUITE_TAP)
 	-$(RM) -rf $(TEST_LOGS:.log=.tap)
 	-$(RM) -rf $(TEST_SUITE_XML)
 	-$(RM) -rf $(TEST_LOGS:.log=.xml)
-
 
 
 

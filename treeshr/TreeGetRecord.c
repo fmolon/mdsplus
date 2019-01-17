@@ -42,15 +42,18 @@ static int64_t ViewDate = -1;
 extern void **TreeCtx();
 
 #define min(a,b) (((a) < (b)) ? (a) : (b))
-
-int TreeGetRecord(int nid_in, struct descriptor_xd *dsc)
-{
-  return _TreeGetRecord(*TreeCtx(), nid_in, dsc);
+int TreeGetRecord(int nid_in, struct descriptor_xd *dsc);
+int _TreeGetRecord(void *dbid, int nid_in, struct descriptor_xd *dsc){
+  int status;
+  CTX_PUSH(&dbid);
+  status = TreeGetRecord(nid_in, dsc);
+  CTX_POP(&dbid);
+  return status;
 }
 
-int _TreeGetRecord(void *dbid, int nid_in, struct descriptor_xd *dsc)
-{
-  PINO_DATABASE *dblist = (PINO_DATABASE *) dbid;
+int TreeGetRecord(int nid_in, struct descriptor_xd *dsc){
+  void* dbid = *TreeCtx();
+  PINO_DATABASE *dblist = (PINO_DATABASE *)dbid;
   NID *nid = (NID *) & nid_in;
   struct descriptor *dptr;
   int status;
@@ -66,6 +69,7 @@ int _TreeGetRecord(void *dbid, int nid_in, struct descriptor_xd *dsc)
     return GetRecordRemote(dblist, nid_in, dsc);
   nid_to_tree_nidx(dblist, nid, info, nidx);
   if (info) {
+    TreeCallHookFun("TreeNidHook","GetNci",info->treenam, info->shot, nid, NULL);
     status = TreeCallHook(GetNci, info, nid_in);
     if (status && STATUS_NOT_OK)
       return 0;
@@ -74,6 +78,7 @@ int _TreeGetRecord(void *dbid, int nid_in, struct descriptor_xd *dsc)
       status = TreeGetNciW(info, nidx, &nci, 0);
       if STATUS_OK {
 	if (nci.length) {
+	  TreeCallHookFun("TreeNidHook","GetData", info->treenam, info->shot, nid, NULL);
 	  status = TreeCallHook(GetData, info, nid_in);
 	  if (status && STATUS_NOT_OK)
 	    return 0;
@@ -183,7 +188,12 @@ int _TreeOpenDatafileR(TREE_INFO * info)
   if (info->data_file) {
     if (!info->data_file->get) {
       size_t len = strlen(info->filespec) - 4;
+#pragma GCC diagnostic push
+#if defined __GNUC__ && 800 <= __GNUC__ * 100 + __GNUC_MINOR__
+    _Pragma ("GCC diagnostic ignored \"-Wstringop-overflow\"")
+#endif
       char *filename = strncpy(malloc(len + 9), info->filespec, len);
+#pragma GCC diagnostic pop
       int lun = -1;
       filename[len] = '\0';
       strcat(filename, "datafile");

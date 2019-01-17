@@ -5,26 +5,21 @@
 # Invoked by mdsplus/deploy/platform/platform_build.sh for windows platform.
 #
 #
-
 RED() {
-    if [ "$1" = "yes" ]
-    then
-	echo -e "\033[31;47m"
-    fi
+  if [ "$COLOR" = "yes" ]
+  then echo -e "\033[31m"
+  fi
 }
 GREEN() {
-    if [ "$1" = "yes" ]
-    then
-	echo -e "\033[32;47m"
-    fi
+  if [ "$COLOR" = "yes" ]
+  then echo -e "\033[32m"
+  fi
 }
 NORMAL() {
-    if [ "$1" = "yes" ]
-    then
-	echo -e "\033[m"
-    fi
+  if [ "$COLOR" = "yes" ]
+  then echo -e "\033[0m"
+  fi
 }
-
 set -e
 
 if [ -r ${SRCDIR}/deploy/os/${OS}.env ]
@@ -57,7 +52,7 @@ then
     $MAKE install
     if ( ! $MAKE -k tests 2>&1 )
     then
-	RED $COLOR
+	RED
 	cat <<EOF >&2
 ======================================================
 
@@ -65,7 +60,7 @@ Failure doing normal tests.
 
 ======================================================
 EOF
-	NORMAL $COLOR
+	NORMAL
 	exit 1
     fi
     popd
@@ -85,6 +80,7 @@ then
     MDSPLUS_DIR=${WORKSPACE}/releasebld/buildroot/usr/local/mdsplus
     mkdir -p ${MDSPLUS_DIR}
     cp ${SRCDIR}/deploy/platform/macosx/MDSplus.pkgproj ${WORKSPACE}/releasebld/
+    cp ${SRCDIR}/deploy/platform/macosx/postInstall.sh ${WORKSPACE}/releasebld/
     pushd ${WORKSPACE}/releasebld/
     ${SRCDIR}/configure \
 	    --prefix=${MDSPLUS_DIR} \
@@ -115,7 +111,7 @@ then
 #	-o ${RELEASEDIR}/${BRANCH}/MDSplus${BNAME}-${VERS[0]}-${VERS[1]}-${VERS[2]}-osx.pkg
     if [ "$?" != "0" ]
     then
-	RED $COLOR
+	RED
 	cat <<EOF >&2
 ======================================================
 
@@ -123,7 +119,7 @@ Failure: Error building installer
 
 ======================================================
 EOF
-	NORMAL $COLOR
+	NORMAL
 	exit 1
     fi
 fi

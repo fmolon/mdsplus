@@ -36,24 +36,20 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "MdsHelper.h"
 #include "jScope_MdsIpProtocolWrapper.h"
 #include "../mdstcpip/mdsip_connections.h"
+#if defined __GNUC__ && 800 <= __GNUC__ * 100 + __GNUC_MINOR__
+    _Pragma ("GCC diagnostic ignored \"-Wstringop-truncation\"")
+#endif
 
 extern int TdiCompile(), TdiData(), TdiFloat();
 
 static char error_message[512];
 
-static jint DYN_JNI_CreateJavaVM(JavaVM ** jvm, void **env, JavaVMInitArgs * vm_args)
-{
-  int status;
-  static jint(*JNI_CreateJavaVM) (JavaVM **, void **, JavaVMInitArgs *) = 0;
-  if (JNI_CreateJavaVM == 0) {
-    static DESCRIPTOR(javalib_d, "java");
-    static DESCRIPTOR(jvmlib_d, "jvm");
-    static DESCRIPTOR(javasym_d, "JNI_CreateJavaVM");
-    status = LibFindImageSymbol(&javalib_d, &javasym_d, &JNI_CreateJavaVM);
-    if (!(status & 1))
-      status = LibFindImageSymbol(&jvmlib_d, &javasym_d, &JNI_CreateJavaVM);
+static jint DYN_JNI_CreateJavaVM(JavaVM ** jvm, void **env, JavaVMInitArgs * vm_args){
+  static jint(*JNI_CreateJavaVM) (JavaVM **, void **, JavaVMInitArgs *) = NULL;
+  int status = LibFindImageSymbol_C("java", "JNI_CreateJavaVM", &JNI_CreateJavaVM);
+  if (!(status & 1)) {
+      status = LibFindImageSymbol_C("jvm", "JNI_CreateJavaVM", &JNI_CreateJavaVM);
     if (!(status & 1)) {
-      JNI_CreateJavaVM = 0;
       printf("JNI_CreateJavaVM Not Found!\n");
       return -1;
     }
@@ -206,29 +202,29 @@ static void *MdsGetArray(char *in, int *out_dim, int type)
   struct descriptor in_d = { 0, DTYPE_T, CLASS_S, 0 };
   EMPTYXD(xd);
   struct descriptor_a *arr_ptr;
-
-  char * const expanded_in = calloc(strlen(in) + 40, sizeof(char));
+  size_t expanded_len = strlen(in) + 40;
+  char * const expanded_in = calloc(expanded_len, sizeof(char));
   error_message[0] = 0;
   *out_dim = 0;
   switch (type) {
   case FLOAT:
-    sprintf(expanded_in, "_xxx = (%s);fs_float(_xxx)", in);
+    snprintf(expanded_in, expanded_len, "_xxx = (%s);fs_float(_xxx)", in);
     in_d.length = strlen(expanded_in);
     in_d.pointer = expanded_in;
     break;
   case DOUBLE:
-    sprintf(expanded_in, "_xxx = (%s);ft_float(_xxx)", in);
+    snprintf(expanded_in, expanded_len, "_xxx = (%s);ft_float(_xxx)", in);
     in_d.length = strlen(expanded_in);
     in_d.pointer = expanded_in;
     break;
   case BYTE:
   case LONG:
-    sprintf(expanded_in, "long(%s)", in);
+    snprintf(expanded_in, expanded_len, "long(%s)", in);
     in_d.length = strlen(expanded_in);
     in_d.pointer = expanded_in;
     break;
   case QUADWORD:
-    sprintf(expanded_in, "%s", in);
+    snprintf(expanded_in, expanded_len, "%s", in);
     in_d.length = strlen(expanded_in);
     in_d.pointer = expanded_in;
     break;

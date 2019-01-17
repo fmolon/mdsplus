@@ -39,7 +39,7 @@ libNiInterface : $(OBJECTS)
 	$(CC)  -c $(CFLAGS)  $< -o $@
 
 $(BIN):	$(SOURCES_EXE)
-	g++ $(LDFLAGS) -L . -lNiInterface $(CFLAGS)  -o $@ $@.cpp 
+	gcc $(LDFLAGS) -L . -lNiInterface $(CFLAGS)  -o $@ $<
 
 
 clean:

@@ -91,7 +91,7 @@ STATIC_ROUTINE int TdiHashAll()
 int TdiHash(int len, char *pstring)
 {
   int jh, jf;
-  static pthread_mutex_t lock;
+  static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
   pthread_mutex_lock(&lock);
   pthread_cleanup_push((void*)pthread_mutex_unlock,&lock);
   jh = TdiHashOne(len, pstring);
@@ -115,7 +115,7 @@ int TdiHash(int len, char *pstring)
 int     main() {
 int     count, jf, k;
         printf(" size  depth\n");
-        for (TdiHASH_MAX = 1025; --TdiHASH_MAX > TdiFUNCTION_MAX;) {
+        for (TdiHASH_MAX = 1025; TdiHASH_MAX-- > TdiFUNCTION_MAX;) {
                 count = TdiHashAll();
                 printf("%5d  %g\n", TdiHASH_MAX, (float)count / (float)TdiHASH_MAX);
                 TdiREF_HASH[0] = 0;
