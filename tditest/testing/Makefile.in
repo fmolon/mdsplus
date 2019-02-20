@@ -703,7 +703,8 @@ TESTS = \
 	test-tdishr.tdi \
 	test-treeshr.tdi \
 	test-mdsip.tdi \
-	test-dev-py.tdi
+	test-dev-py.tdi \
+	test-tab.tdi
 
 
 # if VALGRIND_TESTS is defined this list is executed with valgrind
@@ -714,7 +715,8 @@ VALGRIND_TESTS = \
 	test-tdishr.tdi \
 	test-treeshr.tdi \
 	test-mdsip.tdi \
-	test-dev-py.tdi
+	test-dev-py.tdi \
+	test-tab.tdi
 
 
 # Files produced by tests that must be purged
