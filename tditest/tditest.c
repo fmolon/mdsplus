@@ -118,7 +118,7 @@ char **character_name_completion(const char *text,
 }
 
 static char *getExpression(FILE *f_in) {
-  char line_in[MAXEXPR] = {0};
+  char buf[MAXEXPR] = {0};
   char  *ans = NULL;
   size_t alen = 0;
   int append;
@@ -127,9 +127,11 @@ static char *getExpression(FILE *f_in) {
     size_t nlen;
     if ( f_in == NULL ) {
       next = readline("");
-      nlen = strlen(next);
+      if (next)
+	nlen = strlen(next);
+      else nlen = 0;
     } else {
-      next = fgets(line_in, MAXEXPR-1, f_in);
+      next = fgets(buf, MAXEXPR-1, f_in);
       if (next) {
 	nlen = strlen(next);
 	if (next[nlen-1]=='\n')
