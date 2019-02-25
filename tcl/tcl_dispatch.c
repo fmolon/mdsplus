@@ -152,7 +152,8 @@ EXPORT int TclDispatch(void *ctx, char **error, char **output __attribute__ ((un
       static char treename[13];
       static DESCRIPTOR(nullstr, "\0");
       static int shot;
-      static DBI_ITM itmlst[] = { {13, DbiNAME, treename, 0},
+      static DBI_ITM itmlst[] = {
+      {13, DbiNAME, treename, 0},
       {4, DbiSHOTID, &shot, 0},
       {0, 0, 0, 0}
       };

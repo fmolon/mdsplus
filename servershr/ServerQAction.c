@@ -285,6 +285,8 @@ static void AbortJob(SrvJob * job){
 }
 // main
 static int QJob(SrvJob * job){
+  int status = SendReply(job, SrvJobCHECKEDIN, MDSplusSUCCESS, 0, 0);
+  if STATUS_NOT_OK return status;
   SrvJob *qjob = (SrvJob *) memcpy(malloc(job->h.length), job, job->h.length);
   QUEUE_LOCK;
   if (JobQueueNext)
