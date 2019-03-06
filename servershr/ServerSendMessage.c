@@ -96,8 +96,7 @@ int ServerSendMessage();
 extern short ArgLen();
 
 extern int GetAnswerInfoTS();
-
-/* Job must be a subclass of Condition
+/*
  *typedef struct _Condition {
  *  pthread_cond_t  cond;
  *  pthread_mutex_t mutex;
@@ -105,22 +104,21 @@ extern int GetAnswerInfoTS();
  *} Condition;
  */
 typedef struct job {
-  pthread_cond_t cond;
-  pthread_mutex_t mutex;
-  int value; //aka done
-  int has_condition;
+  struct job* next;
+  int jobid;
+  int conid;
   int *retstatus;
   pthread_rwlock_t *lock;
+  Condition        *cond;
   void (*ast) ();
   void *astparam;
   void (*before_ast) ();
-  int jobid;
-  int conid;
-  struct job* next;
 } Job;
-static pthread_mutex_t jobs_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t jobs_mutex = PTHREAD_MUTEX_INITIALIZER;
 #define LOCK_JOBS   pthread_mutex_lock(&jobs_mutex);pthread_cleanup_push((void*)pthread_mutex_unlock, &jobs_mutex)
 #define UNLOCK_JOBS pthread_cleanup_pop(1)
+#define UNLOCK_JOBS_REV   pthread_mutex_unlock(&jobs_mutex);pthread_cleanup_push((void*)pthread_mutex_lock, &jobs_mutex)
+#define LOCK_JOBS_REV pthread_cleanup_pop(1)
 static Job *Jobs = NULL;
 
 typedef struct _client {
@@ -160,10 +158,12 @@ extern void *GetConnectionInfo();
 static SOCKET getSocket(int conid)
 {
   size_t len;
-  char *info_name;
-  SOCKET readfd;
+  char *info_name = NULL;
+  SOCKET readfd = INVALID_SOCKET;
   GetConnectionInfo(conid, &info_name, &readfd, &len);
-  return (info_name && strcmp(info_name, "tcp") == 0) ? readfd : INVALID_SOCKET;
+  if (info_name && (strcmp(info_name, "tcp") == 0))
+    return readfd;
+  return INVALID_SOCKET;
 }
 
 int ServerSendMessage(int *msgid, char *server, int op, int *retstatus, pthread_rwlock_t *lock, int *conid_out,
@@ -253,8 +253,10 @@ int ServerSendMessage(int *msgid, char *server, int op, int *retstatus, pthread_
     if STATUS_NOT_OK {
       status = MDSplusSUCCESS;
       CleanupJob(status, jobid);
-    } else
+    } else {
       status = MDSplusERROR;
+      CleanupJob(status, jobid);
+    }
   } else {
     if STATUS_NOT_OK {
       perror("Error: no response from server");
@@ -267,88 +269,138 @@ int ServerSendMessage(int *msgid, char *server, int op, int *retstatus, pthread_
   return status;
 }
 
-static void RemoveJob(Job *j){
+static inline void remove_job(Job *j_i) {
+  // only call this when cond is NULL
   LOCK_JOBS;
-  Job *jj, *prev;
-  for (jj = Jobs, prev = NULL; jj && jj != j; prev=jj, jj=jj->next);
-  if (jj) {
-    if (!jj->has_condition) {
-      if (prev) prev->next = jj->next;
-      else      Jobs = jj->next;
-      DBG("Job #%d async done.\n",jj->jobid);
-      free(jj);
-    }
-  }
+  Job *j, *p;
+  for (j = Jobs, p = NULL; j && j != j_i ; p=j, j=j->next);
+  if (!j) return;
+  if (p) p->next = j->next;
+  else   Jobs    = j->next;
+  free(j);
   UNLOCK_JOBS;
 }
-
 
 static pthread_mutex_t job_conds = PTHREAD_MUTEX_INITIALIZER;
-static void DoCompletionAst(Job *j, int status, char *msg, int removeJob){
-  int has_condition = j->has_condition;
+
+static void doCompletionAst(Job *j, int status, char *msg, int removeJob){
   if (j->lock) pthread_rwlock_wrlock(j->lock);
-  if (j->retstatus)
-    *j->retstatus = status;
+  if (j->retstatus) *j->retstatus = status;
   if (j->lock) pthread_rwlock_unlock(j->lock);
-  if (j->ast)
-    (*j->ast) (j->astparam, msg);
-  if (removeJob && j->jobid != MonJob)
-    RemoveJob(j);
+  if (j->ast) (*j->ast) (j->astparam, msg);
   /**** If job has a condition, RemoveJob will not remove it. ***/
-  if (has_condition){
-    pthread_mutex_lock(&job_conds);pthread_cleanup_push((void*)pthread_mutex_unlock, &job_conds);
-    CONDITION_SET(j);
-    pthread_cleanup_pop(1);
+  pthread_mutex_lock(&job_conds);pthread_cleanup_push((void*)pthread_mutex_unlock, &job_conds);
+  if (j->cond){
+    CONDITION_SET(j->cond);
+  } else if (removeJob && j->jobid != MonJob) {
+    remove_job(j);
+    DBG("Job #%d async done.\n",j->jobid);
   }
-}
-
-static void DoCompletionAstId(int jobid, int status, char *msg, int removeJob){
-  Job *j;
-  LOCK_JOBS;
-  for (j=Jobs ; j && (j->jobid != jobid); j=j->next);
-  if (!j) for (j=Jobs ; j && (j->jobid != MonJob); j=j->next);
-  UNLOCK_JOBS;
-  if (j) DoCompletionAst(j, status, msg, removeJob);
-}
-
-static void abandon(void*in) {
-  Job *j = *(Job**)in;
-  if (j && j->has_condition) {
-    j->has_condition = B_FALSE;
-    DBG("Job #%d sync abandoned!\n",j->jobid);
-  }
-}
-static inline Job* get_job_by_conid(int conid) {
-  Job *j;
-  LOCK_JOBS;
-  for (j = Jobs; j && (j->conid != conid) ; j = j->next);
-  UNLOCK_JOBS;
-  return j;
+  pthread_cleanup_pop(1);
 }
 static inline Job* get_job_by_jobid(int jobid) {
   Job *j;
   LOCK_JOBS;
-  for (j = Jobs; j && (j->jobid != jobid); j = j->next);
+  for (j = Jobs ; j && j->jobid != jobid ; j=j->next);
   UNLOCK_JOBS;
   return j;
 }
-static inline void remove_job(Job *j) {
+static  Job* pop_job_by_jobid(int jobid) {
+  Job *j, *p;
   LOCK_JOBS;
-  Job *jj, *prev;
-  for (jj = Jobs, prev = NULL; jj && jj != j; prev=jj, jj=jj->next);
-  if (prev) prev->next = jj->next;
-  else      Jobs = jj->next;
-  free(jj);
+  for (j = Jobs, p = NULL; j && j->jobid != jobid ; p=j, j=j->next);
+  if (j) {
+    if (p) p->next = j->next;
+    else   Jobs    = j->next;
+  }
   UNLOCK_JOBS;
+  return j;
+}
+static  Job* pop_job_by_conid(int conid) {
+  Job *j, *p;
+  LOCK_JOBS;
+  for (j = Jobs, p = NULL; j && j->conid != conid ; p=j, j=j->next);
+  if (j) {
+    if (p) p->next = j->next;
+    else   Jobs    = j->next;
+  }
+  UNLOCK_JOBS;
+  return j;
+}
+static inline int get_client_conid(Client * c, fd_set * fdactive) {
+  int client_found;
+  LOCK_CLIENTS;
+  client_found = 0;
+  if (Clients == c) {
+    client_found = 1;
+    Clients = c->next;
+  } else {
+    Client *cp;
+    for (cp = Clients; cp && cp->next != c; cp = cp->next) ;
+    if (cp && cp->next == c) {
+      client_found = 1;
+      cp->next = c->next;
+    }
+  }
+  UNLOCK_CLIENTS;
+  if (client_found) {
+    int conid = c->conid;
+    if (c->reply_sock != INVALID_SOCKET) {
+      shutdown(c->reply_sock, 2);
+      close(c->reply_sock);
+      if (fdactive)
+	FD_CLR(c->reply_sock, fdactive);
+    }
+    if (c->conid >= 0)
+      DisconnectFromMds(c->conid);
+    free(c);
+    return conid;
+  }
+  return -1;
+}
+static void RemoveClient(Client * c, fd_set * fdactive) {
+  int conid = get_client_conid(c,fdactive);
+  for (;;) {
+    Job *j = pop_job_by_conid(conid);
+    if (j) {
+      doCompletionAst(j, ServerPATH_DOWN, NULL, FALSE);
+      free(j);
+    } else   break;
+  }
+}
+static void CleanupJob(int status, int jobid){
+  Job *j = pop_job_by_jobid(jobid);
+  if (j) {
+    const int conid = j->conid;
+    DisconnectFromMds(conid);
+    doCompletionAst(j, status, NULL, FALSE);
+    free(j);
+    for (;;) {
+      j = pop_job_by_conid(conid);
+      if (j) {
+	doCompletionAst(j, status, NULL, FALSE);
+	free(j);
+      } else   break;
+    }
+  }
+}
+static void abandon(void*in) {
+  Job *j = *(Job**)in;
+  pthread_mutex_lock(&job_conds);pthread_cleanup_push((void*)pthread_mutex_unlock, &job_conds);
+  if (j && j->cond) {
+    CONDITION_DESTROY_PTR(j->cond,&job_conds);
+    DBG("Job #%d sync abandoned!\n",j->jobid);
+  }
+  pthread_cleanup_pop(1);
 }
 static inline void wait_and_remove_job(Job *j) {
-  CONDITION_WAIT_SET(j);
-  CONDITION_DESTROY(j,&job_conds);
+  CONDITION_WAIT_SET(j->cond);
+  CONDITION_DESTROY_PTR(j->cond,&job_conds);
   remove_job(j);
 }
 void ServerWait(int jobid) {
   Job *j = get_job_by_jobid(jobid);
-  if (j && j->has_condition) {
+  if (j && j->cond) {
     DBG("Job #%d sync pending.\n",jobid);
     pthread_cleanup_push(abandon,(void*)&j);
     wait_and_remove_job(j);
@@ -386,33 +438,18 @@ static int RegisterJob(int *msgid, int *retstatus, pthread_rwlock_t *lock, void 
   LOCK_JOBS;
   j->jobid = ++JobId;
   if (msgid) {
-    CONDITION_INIT(j);
-    j->has_condition = B_TRUE;
+    j->cond = malloc(sizeof(Condition));
+    CONDITION_INIT(j->cond);
     *msgid = j->jobid;
     DBG("Job #%d sync registered.\n",j->jobid);
   } else {
-    j->has_condition = B_FALSE;
-    j->value = B_TRUE;
+    j->cond  = NULL;
     DBG("Job #%d async registered.\n",j->jobid);
   }
   j->next = Jobs;
   Jobs = j;
   UNLOCK_JOBS;
   return j->jobid;
-}
-
-static void CleanupJob(int status, int jobid){
-  Job *j = get_job_by_jobid(jobid);
-  if (j) {
-    int conid = j->conid;
-    DoCompletionAst(j, status, 0, 1);
-    DisconnectFromMds(conid);
-    for (;;) {
-      j = get_job_by_conid(conid);
-      if (j) DoCompletionAst(j, status, 0, 1);
-      else   break;
-    }
-  }
 }
 
 static SOCKET CreatePort(uint16_t *port_out) {
@@ -715,9 +752,12 @@ static void DoMessage(Client * c, fd_set * fdactive)
     }
   }
   switch (replyType) {
-  case SrvJobFINISHED:
-    DoCompletionAstId(jobid, status, msg, 1);
+  case SrvJobFINISHED: {
+    Job *j = get_job_by_jobid(jobid);
+    if (!j) j = get_job_by_jobid(MonJob);
+    if (j) doCompletionAst(j, status, msg, TRUE);
     break;
+    }
   case SrvJobSTARTING:
     DoBeforeAst(jobid);
     break;
@@ -727,51 +767,6 @@ static void DoMessage(Client * c, fd_set * fdactive)
     RemoveClient(c, fdactive);
   }
   FREE_NOW(msg);
-}
-
-
-static int get_client_conid(Client * c, fd_set * fdactive) {
-  int client_found;
-  LOCK_CLIENTS;
-  client_found = 0;
-  if (Clients == c) {
-    client_found = 1;
-    Clients = c->next;
-  } else {
-    Client *cp;
-    for (cp = Clients; cp && cp->next != c; cp = cp->next) ;
-    if (cp && cp->next == c) {
-      client_found = 1;
-      cp->next = c->next;
-    }
-  }
-  UNLOCK_CLIENTS;
-  if (client_found) {
-    int conid = c->conid;
-    if (c->reply_sock != INVALID_SOCKET) {
-      shutdown(c->reply_sock, 2);
-      close(c->reply_sock);
-      if (fdactive)
-	FD_CLR(c->reply_sock, fdactive);
-    }
-    if (c->conid >= 0)
-      DisconnectFromMds(c->conid);
-    free(c);
-    return conid;
-  }
-  return -1;
-}
-
-static void RemoveClient(Client * c, fd_set * fdactive) {
-  int conid = get_client_conid(c,fdactive);
-  Job *j;
-  for (;;) {
-    j = get_job_by_conid(conid);
-    if (j) {
-      DoCompletionAst(j, ServerPATH_DOWN, NULL, 0);
-      RemoveJob(j);
-    } else break;
-  }
 }
 
 static void AddClient(unsigned int addr, uint16_t port, int conid)
