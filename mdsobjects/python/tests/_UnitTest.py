@@ -24,7 +24,7 @@
 #
 
 from unittest import TestCase,TestSuite,TextTestRunner
-from MDSplus import Tree,getenv,setenv,tcl
+from MDSplus import Tree,getenv,setenv,tcl,TreeWRITEFIRST,TreeNOT_OPEN
 from threading import RLock
 from re import match
 import gc,os,sys,time
@@ -42,6 +42,7 @@ class logger(object):
 
 class Tests(TestCase):
     debug = False
+    in_valgrind = 'VALGRIND' in os.environ
     inThread = False
     index = 0
     @property
@@ -61,14 +62,15 @@ class Tests(TestCase):
                     self.__getattribute__(test)()
         finally:
             sys.stdout,sys.stderr = stdout,stderr
-    def _doTCLTest(self,expr,out=None,err=None,re=False,verify=False):
+    def _doTCLTest(self,expr,out=None,err=None,re=False,verify=False,quiet=False):
         def checkre(pattern,string):
             if pattern is None:
                 self.assertEqual(string is None,True)
             else:
                 self.assertEqual(string is None,False)
                 self.assertEqual(match(pattern,str(string)) is None,False,'"%s"\nnot matched by\n"%s"'%(string,pattern))
-        sys.stderr.write("TCL> %s\n"%(expr,));
+        if not quiet:
+            sys.stderr.write("TCL> %s\n"%(expr,))
         outo,erro = tcl(expr,True,True,True)
         if verify:
             ver,erro = erro.split('\n',2)
@@ -142,22 +144,65 @@ class MdsIp(object):
     def _testDispatchCommandNoWait(self,mdsip,command,stdout=None,stderr=None):
         self._doTCLTest('dispatch/command/nowait/server=%s %s'  %(mdsip,command))
 
-    def _checkIdle(self,server):
+    def _checkIdle(self,server,**opt):
         show_server = "Checking server: %s\n[^,]+, [^,]+, logging enabled, Inactive\n"%server
-        self._doTCLTest('show server %s'%server,out=show_server,re=True)
+        self._doTCLTest('show server %s'%server,out=show_server,re=True,**opt)
 
     def _waitIdle(self,server,timeout):
         timeout = time.time()+timeout
         while 1:
-            time.sleep(.1)
+            time.sleep(.3)
             try:
-                self._checkIdle(server)
+                self._checkIdle(server,quiet=True)
             except:
                 if time.time()<timeout:
                     continue
                 raise
             else:
                 break
+    def _wait(self,svr,to):
+        if to<=0:
+            return svr.poll()
+        if sys.version_info<(3,3):
+            for i in range(int(10*to)):
+                rtn = svr.poll()
+                if rtn is not None:
+                    break
+                time.sleep(.1)
+            return rtn
+        try:    svr.wait(to)
+        except: return None
+        else:   return svr.poll()
+    def _stop_mdsip(self,*procs_in):
+        for svr,server in procs_in:
+            if svr is None: # close trees on externals
+                try: self._doTCLTest('dispatch/command/wait/server=%s close/all'%server)
+                except: pass
+        procs = [(svr,server) for svr,server in procs_in if svr is not None] # filter external mdsip
+        procs = [(svr,server) for svr,server in procs if svr.poll() is None] # filter terminated
+        if len(procs)==0: return
+        # stop server
+        for svr,server in procs:
+            try:    self._doTCLTest('stop server %s'%server)
+            except: pass
+        t = time.time()+6
+        procs = [(svr,server) for svr,server in procs if self._wait(svr,t-time.time()) is None]
+        if len(procs)==0: return
+        # terminate server
+        for svr,server in procs:
+            sys.stderr.write("sending SIGTERM to %s"%server)
+            svr.terminate()
+        t = time.time()+3
+        procs = [(svr,server) for svr,server in procs if self._wait(svr,t-time.time()) is None]
+        if len(procs)==0: return
+        # kill server
+        for svr,server in procs:
+            sys.stderr.write("sending SIGKILL to %s"%server)
+            svr.kill()
+        t = time.time()+3
+        procs = [server for svr,server in procs if self._wait(svr,t-time.time()) is None]
+        if len(procs)==0: return
+        raise Exception("FALIED cleaning up mdsips: %s"%(", ".join(procs),))
 
     def _start_mdsip(self,server,port,logname,protocol='TCP'):
         if port>0:
@@ -172,8 +217,8 @@ class MdsIp(object):
             except:
                 log.close()
                 raise
-            time.sleep(1)
-            self._checkIdle(server)
+            time.sleep(.3)
+            self._waitIdle(server,10) # allow mdsip to launch
             for envpair in self.envx.items():
                 self._testDispatchCommandNoWait(server,'env %s=%s'%envpair)
             self._testDispatchCommand(server,'set verify')
@@ -237,8 +282,9 @@ class TreeTests(Tests):
                 return False
         trees = [o for o in gc.get_objects() if isTree(o)]
         for t in trees:
-             try: edit = t.open_for_edit
-             except: pass
-             else:
-                 if edit: t.quit()
-                 else:    t.close()
+             try:
+                 t.close()
+             except TreeWRITEFIRST:
+                 t.quit()
+             except TreeNOT_OPEN:
+                 pass

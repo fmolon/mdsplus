@@ -103,19 +103,20 @@ EXPORT int TclDoMethod(void *ctx, char **error, char **output __attribute__ ((un
       }
       if STATUS_OK {
         status = TreeDoMethodA(&nid_dsc,&method_dsc,argc,arglist,&xd);
-	if (STATUS_OK && xd.pointer) {
-	  TdiGetLong(&xd,&status);
-          MdsFree1Dx(&xd, NULL);
+	if STATUS_OK {
+          if (xd.pointer) {
+	    TdiGetLong(&xd,&status);
+            MdsFree1Dx(&xd, NULL);
+          } else
+            status = SsSUCCESS;
         }
       }
-      if (method)
-	free(method);
+      free(method);
       for (i = 0; i < argc; i++)
 	MdsFree1Dx(&xdarg[i], NULL);
     }
   }
-  if (object)
-    free(object);
+  free(object);
   if STATUS_NOT_OK {
     char *msg = MdsGetMsg(status);
     *error = malloc(strlen(msg) + 100);

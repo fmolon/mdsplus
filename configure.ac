@@ -461,7 +461,10 @@ case "$host" in
            D32=""
          fi
          TARGET_ARCH="-m32"
-         UILCMD=uil32
+         if which uil32 >/dev/null
+         then UILCMD=uil32
+         else UILCMD=uil
+         fi
          uiddir="${uiddir}${D32}"
          MAKELIBDIR="\$(top_builddir)/lib${D32}/"
          MAKESHLIBDIR="\$(top_builddir)/lib${D32}/"
@@ -1410,7 +1413,6 @@ AC_OUTPUT(Makefile.inc
           wfevent/Makefile
           xmdsshr/Makefile
           xtreeshr/Makefile
-          icons/Makefile
 )
 
 

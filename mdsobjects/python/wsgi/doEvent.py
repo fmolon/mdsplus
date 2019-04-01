@@ -26,17 +26,18 @@
 from MDSplus import Event
 import time
 
+example = '/event/myevent?timeout=3'
+
 def noCache(response_headers):
     response_headers.append(('Cache-Control','private,no-store, no-cache, must-revalidate, max-age=0,pre-check=0,post-check=0'))
     response_headers.append(('expires','Sat, 26 Jul 1997 09:00:00 GMT'))
     response_headers.append(('Pragma','no-cache'))
 
+class myevent(Event):
+    def run(self):
+        self.cancel()
+
 def doEvent(self):
-
-    class myevent(Event):
-        def run(self):
-            self.cancel()
-
     status = '200 OK'
     response_headers=list()
     noCache(response_headers)

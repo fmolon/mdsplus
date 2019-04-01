@@ -150,7 +150,7 @@ int _TreeCreatePulseFile(void *dbid, int shotid, int numnids_in, int *nids_in) {
       break;
     }
   }
-  if (treepath) free(treepath);
+  free(treepath);
   return status;
 }
 
@@ -221,8 +221,7 @@ STATIC_ROUTINE int _CopyFile(int src_fd, int dst_fd, int lock_it)
 	  }
 	  bytes_to_go -= io_size;
 	}
-	if (buff)
-	  free(buff);
+	free(buff);
 	if (bytes_to_go == 0)
 	  status = TreeSUCCESS;
       } else

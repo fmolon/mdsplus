@@ -23,10 +23,11 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-import os
-import sys
+import os,sys
 from doEvent import noCache
 from MDSplus import Data
+
+example = '/scope?user=user&dir=/home/user/scopes&tree=expt&shot=123'
 
 def getValue(lines, key):
     i = 0;
@@ -334,7 +335,7 @@ def doScope(self):
   else:
     ans=('400 NOT FOUND',[('Content-type','text/text'),],'')
     try:
-      f=open(os.path.dirname(__file__)+'/../html/scope.html',"r")
+      f=open(os.path.dirname(__file__)+'/html/scope.html',"r")
       contents=f.read()
       f.close()
       ans = ('200 OK',[('Content-type','text/html'),],contents)
@@ -364,9 +365,9 @@ def doScopepanel(self):
         if name in self.args:
             try:
                 if t == None:
-		    response_headers.append((name,str(Data.execute(self.args[name][-1]).data())))
-		else:
-		    response_headers.append((name,str(t.tdiExecute(self.args[name][-1]).data())))
+                    response_headers.append((name,str(Data.execute(self.args[name][-1]).data())))
+                else:
+                    response_headers.append((name,str(t.tdiExecute(self.args[name][-1]).data())))
             except Exception:
                 response_headers.append((name + '_error',str(sys.exc_info())))
 

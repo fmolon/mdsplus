@@ -107,26 +107,26 @@ static int parseMsg(char *msg, LinkedEvent * event){
   if (!event->tree) return C_ERROR;
   tmp = strtok(0, " ");
   if (!tmp) return C_ERROR;
-  event->shot = atoi(tmp);
+  event->shot = strtol(tmp,NULL,0);
   if (event->shot <= 0) return C_ERROR;
   tmp = strtok(0, " ");
   if (!tmp) return C_ERROR;
-  event->phase = atoi(tmp);
+  event->phase = strtol(tmp,NULL,0);
   tmp = strtok(0, " ");
   if (!tmp) return C_ERROR;
-  event->nid = atoi(tmp);
+  event->nid = strtol(tmp,NULL,0);
   tmp = strtok(0, " ");
   if (!tmp) return C_ERROR;
-  event->on = atoi(tmp);
+  event->on = strtol(tmp,NULL,0);
   if (event->on != 0 && event->on != 1) return C_ERROR;
   tmp = strtok(0, " ");
   if (!tmp) return C_ERROR;
-  event->mode = atoi(tmp);
+  event->mode = strtol(tmp,NULL,0);
   event->server = strtok(0, " ");
   if (!event->server) return C_ERROR;
   tmp = strtok(0, " ");
   if (!tmp) return C_ERROR;
-  event->status = atoi(tmp);
+  event->status = strtol(tmp,NULL,0);
   event->fullpath = strtok(0, " ");
   if (!event->fullpath) return C_ERROR;
   event->time = strtok(0, ";");
@@ -153,8 +153,7 @@ inline static void _DoTimer(){
   //while (sleep(100)==0)
   while ((ev = GetQEvent())) {
     EventUpdate(ev);
-    if (ev->msg)
-      free(ev->msg);
+    free(ev->msg);
     free(ev);
   }
 }
@@ -177,8 +176,7 @@ static void MessageAst(void* dummy __attribute__ ((unused)), char *reply){
     QEvent(event);
     return;
   }
-  if (event->msg)
-    free(event->msg);
+  free(event->msg);
   free(event);
   CheckIn(0);
 }
@@ -226,7 +224,7 @@ static void Phase(LinkedEvent * event){
       StrCopyDx((struct descriptor *)&phase, (struct descriptor *)&unknown);
     char *str = MdsDescrToCstring(&phase);
     PutLog(event->time, "PHASE", (char *)asterisks, (char *)asterisks, str);
-    if (str) free(str);
+    free(str);
     current_phase = event->phase;
   }
 }

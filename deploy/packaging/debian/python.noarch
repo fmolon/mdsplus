@@ -1,4 +1,3 @@
-./usr/local/mdsplus/mdsobjects/python/MDSobjects-epydoc.prj
 ./usr/local/mdsplus/mdsobjects/python/__init__.py
 ./usr/local/mdsplus/mdsobjects/python/_mdsshr.py
 ./usr/local/mdsplus/mdsobjects/python/_version.py
@@ -7,15 +6,11 @@
 ./usr/local/mdsplus/mdsobjects/python/connection.py
 ./usr/local/mdsplus/mdsobjects/python/descriptor.py
 ./usr/local/mdsplus/mdsobjects/python/event.py
-./usr/local/mdsplus/mdsobjects/python/html/scope.html
-./usr/local/mdsplus/mdsobjects/python/js/mdsScope.js
 ./usr/local/mdsplus/mdsobjects/python/magic.py
-./usr/local/mdsplus/mdsobjects/python/makedoc.sh
 ./usr/local/mdsplus/mdsobjects/python/mdsExceptions.py
 ./usr/local/mdsplus/mdsobjects/python/mdsarray.py
 ./usr/local/mdsplus/mdsobjects/python/mdsdata.py
 ./usr/local/mdsplus/mdsobjects/python/mdsdcl.py
-./usr/local/mdsplus/mdsobjects/python/mdsplus_wsgi.py
 ./usr/local/mdsplus/mdsobjects/python/mdsscalar.py
 ./usr/local/mdsplus/mdsobjects/python/modpython.py
 ./usr/local/mdsplus/mdsobjects/python/scope.py
@@ -28,9 +23,9 @@
 ./usr/local/mdsplus/mdsobjects/python/tests/devices/TestDevice.py
 ./usr/local/mdsplus/mdsobjects/python/tests/devicesUnitTest.py
 ./usr/local/mdsplus/mdsobjects/python/tests/exceptionUnitTest.py
-./usr/local/mdsplus/mdsobjects/python/tests/images/mdsplus_logo.jpg
-./usr/local/mdsplus/mdsobjects/python/tests/images/test-mpeg.gif
-./usr/local/mdsplus/mdsobjects/python/tests/images/test-mpeg.mpg
+./usr/local/mdsplus/mdsobjects/python/tests/images/test.jpg
+./usr/local/mdsplus/mdsobjects/python/tests/images/test.gif
+./usr/local/mdsplus/mdsobjects/python/tests/images/test.mpg
 ./usr/local/mdsplus/mdsobjects/python/tests/mdsip.hosts
 ./usr/local/mdsplus/mdsobjects/python/tests/segmentsUnitTest.py
 ./usr/local/mdsplus/mdsobjects/python/tests/simulateSegfault.py
@@ -66,9 +61,13 @@
 ./usr/local/mdsplus/mdsobjects/python/widgets/mdsplusxdbox.py
 ./usr/local/mdsplus/mdsobjects/python/widgets/mdsplusxdboxbutton.py
 ./usr/local/mdsplus/mdsobjects/python/wsgi/__init__.py
+./usr/local/mdsplus/mdsobjects/python/wsgi/conf/25-mdsplus.conf
+./usr/local/mdsplus/mdsobjects/python/wsgi/conf/mdsplus.conf
+./usr/local/mdsplus/mdsobjects/python/wsgi/conf/mdsplus.wsgi
 ./usr/local/mdsplus/mdsobjects/python/wsgi/colors1.tbl
 ./usr/local/mdsplus/mdsobjects/python/wsgi/do1darray.py
 ./usr/local/mdsplus/mdsobjects/python/wsgi/do1dsignal.py
+./usr/local/mdsplus/mdsobjects/python/wsgi/doDir.py
 ./usr/local/mdsplus/mdsobjects/python/wsgi/doEvent.py
 ./usr/local/mdsplus/mdsobjects/python/wsgi/doFrame.py
 ./usr/local/mdsplus/mdsobjects/python/wsgi/doGetnid.py
@@ -78,3 +77,5 @@
 ./usr/local/mdsplus/mdsobjects/python/wsgi/doPlot.py
 ./usr/local/mdsplus/mdsobjects/python/wsgi/doScope.py
 ./usr/local/mdsplus/mdsobjects/python/wsgi/doTreepath.py
+./usr/local/mdsplus/mdsobjects/python/wsgi/html/scope.html
+./usr/local/mdsplus/mdsobjects/python/wsgi/js/mdsScope.js

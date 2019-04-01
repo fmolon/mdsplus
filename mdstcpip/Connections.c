@@ -33,9 +33,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <pthread_port.h>
 
 #ifdef DEBUG
- #define PDEBUG(...) fprintf(stderr,__VA_ARGS__)
+ #define DBG(...) fprintf(stderr,__VA_ARGS__)
 #else
- #define PDEBUG(...)
+ #define DBG(...) {/**/}
 #endif
 
 static Connection *ConnectionList = NULL;
@@ -55,6 +55,23 @@ Connection *FindConnection(int id, Connection ** prev){
   Connection *c;
   CONNECTIONLIST_LOCK;
   c = _FindConnection(id, prev);
+  if (c && c->state & CON_DISCONNECT) c = NULL;
+  CONNECTIONLIST_UNLOCK;
+  return c;
+}
+
+Connection *FindConnectionSending(int id){
+  Connection *c;
+  CONNECTIONLIST_LOCK;
+  c = _FindConnection(id, NULL);
+  if (c && c->state != CON_SENDARG) {
+    if (c->state & CON_SENDARG) {
+      c->state &= CON_DISCONNECT; // preserve CON_DISCONNECT
+      DBG("Connection %02d -> %02x unlocked\n",c->id,c->state);
+      pthread_cond_signal(&c->cond);
+    }
+    c = NULL;
+  }
   CONNECTIONLIST_UNLOCK;
   return c;
 }
@@ -69,20 +86,20 @@ EXPORT int GetConnectionVersion(int id){
 }
 
 
-Connection *FindConnectionWithLock(int id, char state){
+Connection *FindConnectionWithLock(int id, con_t state){
   Connection *c;
   CONNECTIONLIST_LOCK;
   c = _FindConnection(id, NULL);
   if (c) {
-    while (c->state>0) {
-      PDEBUG("Connection %02d -- %02x waiting\n",c->id,(unsigned char)state);
+    while (c->state && !(c->state & CON_DISCONNECT)) {
+      DBG("Connection %02d -- %02x waiting\n",c->id,state);
       pthread_cond_wait(&c->cond,&connection_mutex);
     }
-    if (c->state<0) {
+    if (c->state & CON_DISCONNECT) {
       pthread_cond_signal(&c->cond); // pass on signal
       c = NULL;
     } else {
-      PDEBUG("Connection %02d -> %02x   locked\n",c->id,(unsigned char)state);
+      DBG("Connection %02d -> %02x   locked\n",c->id,state);
       c->state = state;
     }
   }
@@ -90,18 +107,19 @@ Connection *FindConnectionWithLock(int id, char state){
   return c;
 }
 
-void UnlockConnection(Connection* c) {
+void UnlockConnection(Connection* c_in) {
+  CONNECTIONLIST_LOCK;
+  Connection *c; // check if not yet freed
+  for (c = ConnectionList; c && c != c_in; c = c->next);
   if (c) {
-    CONNECTIONLIST_LOCK;
     c->state &= CON_DISCONNECT; // preserve CON_DISCONNECT
-    PDEBUG("Connection %02d -> %02x unlocked\n",c->id,(unsigned char)c->state);
+    DBG("Connection %02d -> %02x unlocked\n",c->id,c->state);
     pthread_cond_signal(&c->cond);
-    CONNECTIONLIST_UNLOCK;
   }
+  CONNECTIONLIST_UNLOCK;
 }
 
 #define CONNECTION_UNLOCK_PUSH(c) pthread_cleanup_push((void*)UnlockConnection,(void*)c)
-#define CONNECTION_LOCK(c,state)  LockConnection(c,state);CONNECTION_UNLOCK_PUSH(c)
 #define CONNECTION_UNLOCK(c)      pthread_cleanup_pop(1)
 
 int NextConnection(void **ctx, char **info_name, void **info, size_t * info_len){//check
@@ -177,9 +195,9 @@ static void registerHandler(){
 ////////////////////////////////////////////////////////////////////////////////
 
 void DisconnectConnectionC(Connection *c){
+  // connection should not be in list at this point
   c->io->disconnect(c);
-  if (c->info)
-    free(c->info);
+  free(c->info);
   FreeDescriptors(c);
   free(c->protocol);
   free(c->info_name);
@@ -189,27 +207,28 @@ void DisconnectConnectionC(Connection *c){
 }
 
 int DisconnectConnection(int conid){
-  INIT_STATUS_AS MDSplusERROR;
   Connection *p, *c;
   CONNECTIONLIST_LOCK;
   c = _FindConnection(conid, &p);
   if (c) {
-    if (p == 0)
-      ConnectionList = c->next;
-    else
-      p->next = c->next;
     c->state |= CON_DISCONNECT;
-    while (c->state&!CON_DISCONNECT) {
-      pthread_cond_broadcast(&c->cond);
-      pthread_cond_wait(&c->cond,&connection_mutex);
-    } // allow current action to finish
+    pthread_cond_broadcast(&c->cond);
+    if (c->state & !CON_DISCONNECT) {
+      struct timespec tp;
+      clock_gettime(CLOCK_REALTIME, &tp);
+      tp.tv_sec += 10; // wait upto 10 seconds to allow current task to finish
+      while (c->state & !CON_DISCONNECT && pthread_cond_timedwait(&c->cond,&connection_mutex,&tp));
+    }
+    // remove after tast is complete
+    if (p)      p->next = c->next;
+    else ConnectionList = c->next;
   }
   CONNECTIONLIST_UNLOCK;
   if (c) {
     DisconnectConnectionC(c);
-    status = MDSplusSUCCESS;
+    return MDSplusSUCCESS;
   }
-  return status;
+  return MDSplusERROR;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -245,8 +264,7 @@ void FreeDescriptors(Connection * c){
     for (i = 0; i < MDSIP_MAX_ARGS; i++) {
       if (c->descrip[i]) {
 	if (c->descrip[i] != MdsEND_ARG) {
-	  if (c->descrip[i]->pointer)
-	    free(c->descrip[i]->pointer);
+	  free(c->descrip[i]->pointer);
 	  free(c->descrip[i]);
 	}
 	c->descrip[i] = NULL;
@@ -457,8 +475,7 @@ int AcceptConnection(char *protocol, char *info_name, SOCKET readfd, void *info,
     SetConnectionInfoC(c, info_name, readfd, info, info_len);
     m_user = GetMdsMsgTOC(c, &status, 10000);
     if (!m_user || STATUS_NOT_OK) {
-      if (m_user)
-	free(m_user);
+      free(m_user);
       if (usr) *usr = NULL;
       DisconnectConnectionC(c);
       return MDSplusERROR;
@@ -485,7 +502,7 @@ int AcceptConnection(char *protocol, char *info_name, SOCKET readfd, void *info,
       fprintf(stderr, "Access denied: %s\n",user_p);
     else
       fprintf(stderr, "Connected: %s\n",user_p);
-    if (user) free(user);
+    free(user);
     m.h.status = STATUS_OK ? (1 | (c->compression_level << 1)) : 0;
     m.h.client_type = m_user ? m_user->h.client_type : 0;
     m.h.ndims = 1;

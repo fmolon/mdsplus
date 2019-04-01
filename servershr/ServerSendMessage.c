@@ -183,7 +183,6 @@ int ServerSendMessage(int *msgid, char *server, int op, int *retstatus, pthread_
   uint32_t addr = 0;
   char cmd[4096];
   unsigned char numargs = max(0, min(numargs_in, 8));
-  unsigned char idx = 0;
   char dtype;
   char ndims;
   int dims[8];
@@ -242,7 +241,7 @@ int ServerSendMessage(int *msgid, char *server, int op, int *retstatus, pthread_
     }
   }
   strcat(cmd, ")");
-  status = SendArg(conid, idx++, DTYPE_CSTRING, 1, (short)strlen(cmd), 0, 0, cmd);
+  status = SendArg(conid, 0, DTYPE_CSTRING, 1, (short)strlen(cmd), 0, 0, cmd);
   if STATUS_NOT_OK {
       perror("Error sending message to server");
       CleanupJob(status, jobid);
@@ -264,8 +263,7 @@ int ServerSendMessage(int *msgid, char *server, int op, int *retstatus, pthread_
       return status;
     }
   }
-  if (mem)
-    free(mem);
+  free(mem);
   return status;
 }
 
@@ -461,8 +459,8 @@ static SOCKET CreatePort(uint16_t *port_out) {
       for (dash=range; *dash && *dash!='-' ; dash++);
       if (dash)
         *(dash++)=0;
-      start_port = (uint16_t)(atoi(range)&0xffff);
-      int end = atoi(dash);
+      start_port = (uint16_t)(strtol(range,NULL,0)&0xffff);
+      int end = strtol(dash,NULL,0);
       if (end>0 && end<65536)
         range_port = (uint16_t)end-start_port+1;
       else
@@ -666,17 +664,17 @@ static Client* get_addr_port(char* server, uint32_t*addrp, uint16_t*portp) {
   }
   addr = LibGetHostAddr(hostpart);
   if (!addr) return NULL;
-  if (atoi(portpart) == 0) {
+  if (strtol(portpart,NULL,0) == 0) {
     struct servent *sp = getservbyname(portpart, "tcp");
     if (sp)
       port = sp->s_port;
     else {
       char *portnam = getenv(portpart);
       portnam = (!portnam) ? ((hostpart[0] == '_') ? "8200" : "8000") : portnam;
-      port = htons((uint16_t)atoi(portnam));
+      port = htons((uint16_t)strtol(portnam,NULL,0));
     }
   } else
-    port = htons((uint16_t)atoi(portpart));
+    port = htons((uint16_t)strtol(portpart,NULL,0));
   if (addrp) *addrp=addr;
   if (portp) *portp=port;
   return get_client(addr,port);
@@ -684,11 +682,9 @@ static Client* get_addr_port(char* server, uint32_t*addrp, uint16_t*portp) {
 
 EXPORT int ServerDisconnect(char *server_in) {
   char *srv = TranslateLogical(server_in);
-  Client* c;
-  FREE_ON_EXIT(srv);
   char *server = srv ? srv : server_in;
-  c = get_addr_port(server,NULL,NULL);
-  FREE_NOW(srv);
+  Client *c = get_addr_port(server,NULL,NULL);
+  free(srv);
   if (c) {
     RemoveClient(c, NULL);
     return MDSplusSUCCESS;
@@ -697,10 +693,8 @@ EXPORT int ServerDisconnect(char *server_in) {
 }
 
 EXPORT int ServerConnect(char *server_in) {
-  int conid;
+  int conid = -1;
   char *srv = TranslateLogical(server_in);
-  FREE_ON_EXIT(srv);
-  conid = -1;
   char *server = srv ? srv : server_in;
   uint32_t addr;
   uint16_t port = 0;
@@ -716,7 +710,7 @@ EXPORT int ServerConnect(char *server_in) {
     if (conid>=0)
       AddClient(addr, port, conid);
   }
-  FREE_NOW(srv);
+  free(srv);
   return conid;
 }
 

@@ -40,15 +40,14 @@ char *from_d;
 char *to_d;
 } move_t;
 static void freemove(void* move_p) {
-  if (((move_t*)move_p)->from_c) free(((move_t*)move_p)->from_c);
-  if (((move_t*)move_p)->to_c  ) free(((move_t*)move_p)->to_c  );
-  if (((move_t*)move_p)->from_d) free(((move_t*)move_p)->from_d);
-  if (((move_t*)move_p)->to_d  ) free(((move_t*)move_p)->to_d  );
+  free(((move_t*)move_p)->from_c);
+  free(((move_t*)move_p)->to_c  );
+  free(((move_t*)move_p)->from_d);
+  free(((move_t*)move_p)->to_d  );
 }
 static void treeclose(void* dbid_p) {
   _TreeClose(dbid_p, 0, 0);
-  if (*(void**)dbid_p)
-    free(*(void**)dbid_p);
+  free(*(void**)dbid_p);
 }
 STATIC_ROUTINE int RewriteDatafile(char *tree, int shot, int compress)
 {

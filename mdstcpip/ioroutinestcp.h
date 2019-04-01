@@ -54,7 +54,7 @@ static void SetSocketOptions(SOCKET s, int reuse){
 #endif
   const char * tcp_window_size = getenv("TCP_WINDOW_SIZE");
   if(tcp_window_size && strlen(tcp_window_size)) {
-      recvbuf = sendbuf = atoi(tcp_window_size);
+      recvbuf = sendbuf = strtol(tcp_window_size,NULL,0);
       setsockopt(s, SOL_SOCKET, SO_RCVBUF, (char *)&recvbuf, sizeof(int));
       setsockopt(s, SOL_SOCKET, SO_SNDBUF, (char *)&sendbuf, sizeof(int));
   }
@@ -177,7 +177,7 @@ static int io_flush(Connection* c){
 static short getPort(char *name){
   short port;
   struct servent *sp;
-  port = htons((short)atoi(name));
+  port = htons((short)strtol(name,NULL,0));
   if (port == 0) {
     sp = getservbyname(name, "tcp");
     if (!sp) {
@@ -271,7 +271,7 @@ static int io_listen(int argc, char **argv){
           client->next = ClientList;
           client->username = username;
           client->addr = ((struct sockaddr_in*)&sin)->sin_addr.s_addr;
-          client->host = getHostInfo(sock, &client->iphost, NULL);
+          client->iphost = getHostInfo(sock, &client->host);
           ClientList = client;
           // add socket to active sockets //
           FD_SET(sock, &fdactive);

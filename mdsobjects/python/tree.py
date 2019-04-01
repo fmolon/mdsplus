@@ -756,15 +756,17 @@ class Tree(object):
         """
         return tuple(self.findTagsIter(wild))
 
-    @staticmethod
-    def getCurrent(treename):
-        """Return current shot for specificed treename
-        @param treename: Name of tree
-        @type treename: str
+    @classmethodX
+    def getCurrent(self,tree=None):
+        """Return current shot for specificed tree
+        @param tree: Name of tree
+        @type tree: str
         @return: Current shot number for the specified tree
         @rtype: int
         """
-        shot=_TreeShr.TreeGetCurrentShotId(_ver.tobytes(treename))
+        if isinstance(self,(Tree,)):
+            tree = self.tree
+        shot=_TreeShr.TreeGetCurrentShotId(_ver.tobytes(tree))
         if shot==0:
             raise _exc.TreeNOCURRENT()
         return shot
@@ -874,6 +876,22 @@ class Tree(object):
             raise _exc.MDSplusException(status)
         return _scr.Uint64(dt.value).date
 
+    @classmethodX
+    def incrementCurrent(self,tree=None,inc=1):
+        """Increments current shot for specified tree by inc
+        @param tree: Name of tree
+        @type tree: str
+        @param inc: Increment (default: 1)
+        @return shot: New current shot number for the specified tree
+        @rtype int
+        """
+        if isinstance(self,(Tree,)): # instancemethod: args shifted by one
+            if tree is not None: inc = tree
+            tree = self.tree
+        shot = Tree.getCurrent(tree)+inc
+        Tree.setCurrent(tree,shot)
+        return shot
+
     def isModified(self):
         """Check to see if tree is open for edit and has been modified
         @return: True if tree structure has been modified.
@@ -906,17 +924,20 @@ class Tree(object):
                 _TreeShr._TreeRemoveTag(self.ctx,
                                         _C.c_char_p(_ver.tobytes(tag))))
 
-    @staticmethod
-    def setCurrent(treename,shot):
-        """Set current shot for specified treename
-        @param treename: Name of tree
-        @type treename: str
+    @classmethodX
+    def setCurrent(self,tree=None,shot=None):
+        """Set current shot for specified tree
+        @param tree: Name of tree
+        @type tree: str
         @param shot: Shot number
         @type shot: int
         @rtype None
         """
+        if isinstance(self,(Tree,)): # instancemethod: args shifted by one
+            shot = self.shot if tree is None else tree
+            tree = self.tree
         _exc.checkStatus(
-                _TreeShr.TreeSetCurrentShotId(_C.c_char_p(_ver.tobytes(treename)),
+                _TreeShr.TreeSetCurrentShotId(_C.c_char_p(_ver.tobytes(tree)),
                                               _C.c_int32(int(shot))))
 
     def setDefault(self,node):
@@ -1097,7 +1118,7 @@ class TreeNode(_dat.TreeRef,_dat.Data): # HINT: TreeNode begin  (maybe subclass 
     def copy(self,mode='NORMAL'):
         """returns the node with a local private instance of the tree opend in specified mode
         @param mode: Optional mode, one of 'Normal','Edit','New','Readonly'
-        @type mode: str         
+        @type mode: str
         @rtype: TreeNode
         """
         return self.__class__(self.nid,self.tree.copy(mode))
@@ -1127,9 +1148,10 @@ class TreeNode(_dat.TreeRef,_dat.Data): # HINT: TreeNode begin  (maybe subclass 
         @return: Part name of this node
         @rtype: str
         """
-        if self.head is self: return ""
+        if self.head is self or not isinstance(self.head,Device): return ""
         if self._original_part_name is None:
-            self._original_part_name = self.head.__class__.parts[self.nid-self.head.nid-1]['path']
+            try:   self._original_part_name = self.head.__class__.parts[self.nid-self.head.nid-1]['path']
+            except:self._original_part_name = ""
         return self._original_part_name
     PART_NAME=ORIGINAL_PART_NAME
 
@@ -2326,12 +2348,12 @@ class TreeNode(_dat.TreeRef,_dat.Data): # HINT: TreeNode begin  (maybe subclass 
                                      _C.byref(_C.c_int64(int(timestamp))),
                                      _dat.Data.byref(data)))
 
-    def putSegment(self,data,idx):
+    def putSegment(self,data,idx=-1):
         """Load a segment in a node
         @param data: data to load into segment
         @type data: Array or Scalar
         @param idx: index into segment to load data
-        @type idx: int
+        @type idx: int (default: append)
         @rtype: None
         """
         data = _dat.Data(data)
@@ -2434,6 +2456,12 @@ class TreeNode(_dat.TreeRef,_dat.Data): # HINT: TreeNode begin  (maybe subclass 
         @rtype: original type
         """
         self.compress_segments=flag
+
+    def setDefault(self):
+        """Set compress segments state of this node
+        @rtype: None
+        """
+        self.tree.setDefault(self)
 
     def setDoNotCompress(self,flag):
         """Set do not compress state of this node

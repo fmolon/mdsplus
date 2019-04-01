@@ -111,7 +111,12 @@ class Tests(_UnitTest.TreeTests,_UnitTest.MdsIp):
                 """ tcl dispatch """
                 self._testDispatchCommand(server,'type test')
                 self._doTCLTest('set tree pytree/shot=%d'%shot)
-                #self._doTCLTest('dispatch TESTDEVICE_S:ACTIONSERVER:MANUAL')
+                #if not self.in_valgrind:
+                #    self._doTCLTest('dispatch TESTDEVICE_S:ACTIONSERVER:MANUAL')
+                #    self._waitIdle(server,3)
+                #else:
+                #    sys.stdout.write("VALGRIND: skipping 'dispatch TESTDEVICE_S:ACTIONSERVER:MANUAL'\n")
+                #    sys.stdout.flush()
                 self._doTCLTest('dispatch/build%s'%monitor_opt)
                 self._doTCLTest('dispatch/phase%s INIT'%monitor_opt)
                 self._waitIdle(server,3)
@@ -124,25 +129,15 @@ class Tests(_UnitTest.TreeTests,_UnitTest.MdsIp):
                 """ tcl check if still alive """
                 if mon: self.assertEqual(mon.poll(),None)
                 if svr: self.assertEqual(svr.poll(),None)
-                """ tcl QuitServer """
-                self._doTCLTest('stop server %s'%server)
-                self._doTCLTest('stop server %s'%monitor)
             finally:
-                if svr and svr.poll() is None:
-                    svr.terminate()
-                    svr.wait()
-                else:
-                    try: self._doTCLTest('dispatch/command/wait/server=%s close/all'%server)
-                    except: pass
-                if mon and mon.poll() is None:
-                    mon.terminate()
-                    mon.wait()
+                self._stop_mdsip((svr,server),(mon,monitor))
         finally:
             if svr_log: svr_log.close()
             if mon_log: mon_log.close()
             self._doTCLTest('close/all')
         pytree.readonly()
-        #self.assertTrue(pytree.TESTDEVICE_S.MANUAL_DONE.record<= pytree.TESTDEVICE_S.INIT1_DONE.record)
+        #if not self.in_valgrind:
+        #    self.assertTrue(pytree.TESTDEVICE_S.MANUAL_DONE.record<= pytree.TESTDEVICE_S.INIT1_DONE.record)
         self.assertTrue(pytree.TESTDEVICE_I.INIT1_DONE.record <= pytree.TESTDEVICE_I.INIT2_DONE.record)
         self.assertTrue(pytree.TESTDEVICE_S.INIT1_DONE.record <= pytree.TESTDEVICE_S.INIT2_DONE.record)
         self.assertTrue(pytree.TESTDEVICE_I.INIT2_DONE.record <= pytree.TESTDEVICE_I.STORE_DONE.record)
@@ -181,9 +176,7 @@ class Tests(_UnitTest.TreeTests,_UnitTest.MdsIp):
                     test_normal(c,"py('1')",timeout=1000) # verify locks are released
                 self._doTCLTest('stop server %s'%server)
             finally:
-                if svr and svr.poll() is None:
-                    svr.terminate()
-                    svr.wait()
+                self._stop_mdsip((svr,server))
         finally:
             if svr_log: svr_log.close()
     def timeoutfull(self): self.timeout(full=True)

@@ -486,12 +486,10 @@ static inline void setMonitor(const char* monitor){
     MONITOR_QUEUE_LOCK;
     if (monitor) {
       MonitorOn = B_TRUE;
-      if (Monitor)
-	free(Monitor);
+      free(Monitor);
       Monitor = strdup(monitor);
     } else {
-      if (Monitor)
-	free(Monitor);
+      free(Monitor);
       Monitor = NULL;
       MonitorOn = B_FALSE;
     }
@@ -789,10 +787,10 @@ static inline void serverFreeDispatchTable(void *vtable) {
   int num_actions = ((DispatchTable*)vtable)->num;
   int i;
   for (i = 0; i < num_actions; i++) {
-    free_if(&actions[i].referenced_by);
+    free(actions[i].referenced_by);
     if (actions[i].path)
       TreeFree(actions[i].path);
-    free_if(&actions[i].event);
+    free(actions[i].event);
     if (actions[i].condition) {
       MdsFree1Dx((struct descriptor_xd *)actions[i].condition, 0);
       free(actions[i].condition);

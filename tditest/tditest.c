@@ -89,8 +89,7 @@ char *character_name_generator(const char *text, int state){
     character_names = realloc(character_names,sizeof(void*)*(curlen+1));
     character_names[curlen] = NULL;
     LibFindFileEnd(&ctx);
-    if (ans.pointer)
-      free(ans.pointer);
+    free(ans.pointer);
   }
   static int list_index, len;
   char *name;
@@ -101,6 +100,8 @@ char *character_name_generator(const char *text, int state){
   // use case sensitivity to distinguish between builtins and tdi.funs
   while ((name = character_names[list_index++]))
     if (strncmp(name, text, len) == 0) {
+      if (name[0] == '$') // constants like $PI
+        return strdup(name);
       size_t len = strlen(name);
       char *match = memcpy(malloc(len+2),name,len);
       match[len]='(';match[len+1]='\0';
@@ -141,8 +142,7 @@ static char *getExpression(FILE *f_in) {
     }
     if (nlen<=0) {
       if (ans) {
-        if (next)
-          free(next);
+        free(next);
         next = ans;
       } else
         ans = next;
@@ -235,7 +235,7 @@ int main(int argc, char **argv)
     }
     free(command);
   }
-  if (command) free(command);
+  free(command);
   MdsFree1Dx(&ans,NULL);
   if (history_file) {
     write_history(history_file);

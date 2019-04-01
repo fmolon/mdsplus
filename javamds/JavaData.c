@@ -60,7 +60,7 @@ JNIEXPORT jstring JNICALL Java_Data_toString(JNIEnv * env, jobject obj)
   buf[dec_d->length] = 0;
   MdsFree1Dx(&out_xd, NULL);
   ris = (*env)->NewStringUTF(env, buf);
-  free((char *)buf);
+  free(buf);
   return ris;
 }
 
@@ -912,8 +912,7 @@ EXPORT void FreeDescrip(struct descriptor *desc)
   switch (desc->class) {
   default:break;
   case CLASS_S:
-    if (desc->pointer)
-      free(desc->pointer);
+    free(desc->pointer);
     break;
   case CLASS_A:
     if (desc->pointer)
@@ -932,5 +931,5 @@ EXPORT void FreeDescrip(struct descriptor *desc)
       FreeDescrip(((struct descriptor **)array_d->pointer)[i]);
     break;
   }
-  free((char *)desc);
+  free(desc);
 }
