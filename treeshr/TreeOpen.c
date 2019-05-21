@@ -137,6 +137,8 @@ EXPORT char *TreePath(char const *tree, char *tree_lower_out){
   if (tree_lower_out)
     strcpy(tree_lower_out, tree_lower);
   path = TranslateLogical(pathname);
+  if (path == NULL)
+    path = TranslateLogical(TREE_DEFAULT_PATH);
   if (path) {
     // remove trailing spaces
     for (i = strlen(path); i > 0 && (path[i - 1] == ' ' || path[i - 1] == 9); i--)
@@ -218,10 +220,10 @@ EXPORT int _TreeOpen(void **dbid, char const *tree_in, int shot_in, int read_onl
       PINO_DATABASE **dblist = (PINO_DATABASE **) dbid;
       int db_slot_status = CreateDbSlot(dblist, tree, shot, 0);
       if (db_slot_status == TreeNORMAL || db_slot_status == TreeALREADY_OPEN) {
-        status = ConnectTree(*dblist, tree, 0, subtree_list);
-        if (status==TreeUNSUPTHICKOP)
-          if (strlen(path) > 2 && path[strlen(path) - 2] == ':' && path[strlen(path) - 1] == ':')
-            status = ConnectTreeRemote(*dblist, tree, subtree_list, path);
+	status = ConnectTree(*dblist, tree, 0, subtree_list);
+	if (status==TreeUNSUPTHICKOP)
+	  if (strlen(path) > 2 && path[strlen(path) - 2] == ':' && path[strlen(path) - 1] == ':')
+	    status = ConnectTreeRemote(*dblist, tree, subtree_list, path);
 	if (status == TreeNORMAL || status == TreeNOTALLSUBS) {
 	  if (db_slot_status == TreeNORMAL)
 	    (*dblist)->default_node = (*dblist)->tree_info->root;
@@ -348,7 +350,7 @@ static int CloseTopTree(PINO_DATABASE * dblist, int call_hook) {
 	    free(local_info->tag_info);
 	  if (local_info->edit->external_pages)
 	    free(local_info->external);
-          free(local_info->edit->deleted_nid_list);
+	  free(local_info->edit->deleted_nid_list);
 	  free(local_info->edit);
 	}
 
@@ -399,8 +401,8 @@ static int CloseTopTree(PINO_DATABASE * dblist, int call_hook) {
 	    }
 	    free(local_info->filespec);
 	    free(local_info->treenam);
-            if (local_info->has_lock)
-              pthread_rwlock_destroy(&local_info->lock);
+	    if (local_info->has_lock)
+	      pthread_rwlock_destroy(&local_info->lock);
 	    previous_info = local_info;
 	    local_info = local_info->next_info;
 	    free(previous_info);
@@ -487,7 +489,7 @@ static int ConnectTree(PINO_DATABASE * dblist, char *tree, NODE * parent, char *
    ***********************************************/
       info->has_lock = !TreeUsingPrivateCtx();
       if (info->has_lock)
-        pthread_rwlock_init(&info->lock,NULL);
+	pthread_rwlock_init(&info->lock,NULL);
       info->flush = (dblist->shotid == -1);
       info->treenam = strdup(tree);
       info->shot = dblist->shotid;
@@ -556,9 +558,9 @@ static int ConnectTree(PINO_DATABASE * dblist, char *tree, NODE * parent, char *
 
 #define move_to_top(prev_db,db)\
   if (prev_db) \
-            {prev_db->next = db->next;\
-            db->next = *dblist;\
-            *dblist = db;}
+	    {prev_db->next = db->next;\
+	    db->next = *dblist;\
+	    *dblist = db;}
 
 
 EXPORT int _TreeNewDbid(void** dblist){
@@ -660,7 +662,7 @@ static int CreateDbSlot(PINO_DATABASE ** dblist, char *tree, int shot, int editt
 	  treeshr_errno = TreeMAXOPENEDIT;
 	}
       } else
-        status = _TreeNewDbid((void**)dblist);
+	status = _TreeNewDbid((void**)dblist);
     }
   }
   if (status == TreeNORMAL) {
@@ -873,11 +875,11 @@ int OpenOne(TREE_INFO * info, TREE_INFO * root, tree_type_t type, int new, int e
  /* from python-mmap Issue #11277: fsync(2) is not enough on OS X - a special, OS X specific
     fcntl(2) is necessary to force DISKSYNC and get around mmap(2) bug */
       if (info->mapped && fd != -1)
-        (void)fcntl(fd, F_FULLFSYNC);
+	(void)fcntl(fd, F_FULLFSYNC);
 # endif
 #endif
       if (fd == -1)
-        status = edit_flag ? TreeFOPENW : TreeFOPENR;
+	status = edit_flag ? TreeFOPENW : TreeFOPENR;
     }
   }
   *fd_out = fd;
@@ -1237,7 +1239,7 @@ int _TreeOpenNew(void **dbid, char const *tree_in, int shot_in)
 	    status = TreeExpandNodes(*dblist, 0, 0);
 	    //strncpy(info->node->name, "TOP         ", sizeof(info->node->name));
 	    strcpy(info->node->name,"TOP");
-            memset(info->node->name+3,' ',sizeof(info->node->name)-3);
+	    memset(info->node->name+3,' ',sizeof(info->node->name)-3);
 	    info->node->parent = 0;
 	    info->node->child = 0;
 	    info->node->member = 0;

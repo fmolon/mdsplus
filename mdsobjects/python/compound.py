@@ -74,7 +74,7 @@ class Compound(_dat.DataX):
             return self.getDescAt(self._fields[name])
         elif name.startswith('get') and name[3:].lower() in self._fields:
             def getter():
-                return self.__passTree(self._descs[self._fields[name[3:].lower()]])[0]
+                return self._descs[self._fields[name[3:].lower()]]
             return getter
         elif name.startswith('set') and name[3:].lower() in self._fields:
             def setter(value):
@@ -238,7 +238,10 @@ class Conglom(_dat.TreeRefX,Compound):
             module = imp.new_module(model)
             qualifiers = self.qualifiers.data()
             if isinstance(qualifiers,_ver.basestring):
-                try:    exec(compile(qualifiers,model,'exec'),{'Device':_tre.Device},module.__dict__)
+                try:
+                    if qualifiers.startswith("Device.PyDevice("):
+                        module.__dict__[model] = eval(compile(qualifiers,model,'eval'),{'Device':_tre.Device},module.__dict__)
+                    else:                        exec(compile(qualifiers,model,'exec'),{},module.__dict__)
                 except: pass
         else:
             if unique in sys.modules:

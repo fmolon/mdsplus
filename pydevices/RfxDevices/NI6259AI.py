@@ -22,6 +22,9 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
+#
+#   2019 03 07: Trig time is initialized to trig source value also in INTERNAL mode
+#
 
 from MDSplus import mdsExceptions, Device, Data, Range, Dimension, Window, Int32, Float32, Float64, Float32Array
 from MDSplus.mdsExceptions import DevCOMM_ERROR
@@ -102,23 +105,26 @@ class NI6259AI(Device):
     AI_START_SELECT_PULSE  = c_int(0)
     AI_START_SELECT_PFI1 = c_int(2)
 
-    AI_START_SELECT_RTSI0 = c_int(11)
-    AI_START_SELECT_RTSI1 = c_int(12)
+#    AI_START_SELECT_RTSI0 = c_int(11)
+#    AI_START_SELECT_RTSI1 = c_int(12)
 
 #Codac Core 5.0
-    AI_START_SELECT = c_int(10)
-    AI_START_POLARITY = c_int(11)
+#    AI_START_SELECT = c_int(10)
+#    AI_START_POLARITY = c_int(11)
+
+#Codac Core 6.0
+    AI_START_SELECT = c_int(11)
+    AI_START_POLARITY = c_int(12)
 
     AI_START_POLARITY_RISING_EDGE = c_int(0)
-
     AI_REFERENCE_SELECT_PULSE  = c_int(0)
     AI_REFERENCE_SELECT_PFI1 = c_int(2)
+
 
  #Codac Core 5.0
     AI_REFERENCE_SELECT = c_int(12)
     AI_REFERENCE_POLARITY = c_int(13)
     AI_REFERENCE_POLARITY_RISING_EDGE = c_int(0)
-
     PXI6259_AI_START_TRIGGER = c_int(3)
     PXI6259_RTSI1 = c_int(3)
     PXI6259_RTSI2 = c_int(4)
@@ -142,7 +148,13 @@ class NI6259AI(Device):
 
 
     def debugPrint(self, msg="", obj=""):
-          print( self.name + ":" + msg, obj );
+          msger=""
+          if NI6259AI.niInterfaceLib is not None:
+              errno = NI6259AI.niInterfaceLib.getErrno();
+              print "erno ", errno
+              if errno is not None:
+                  msger = 'Error (%d) %s' % (errno, os.strerror( errno ))
+          print( self.name + ":" + msg, obj, msger );
 
 #saveInfo and restoreInfo allow to handle open file descriptors
     def saveInfo(self):
@@ -380,13 +392,11 @@ class NI6259AI(Device):
 
         self.debugPrint('================= 11 PXI 6259 Init ===============')
 
-        ##self.restoreInfo()
 
 #Module in acquisition check
         if self.restoreInfo() == self.DEV_IS_OPEN :
             try:
                self.restoreWorker()
-               print 'Chech Start Store'
                if self.worker.isAlive():
                   print 'stop Store'
                   self.stop_store()
@@ -483,11 +493,13 @@ class NI6259AI(Device):
                     """
                     if( trigMode == 'EXTERNAL_PFI1' or trigMode == 'EXT_PFI1_R_RTSI1' ):
                         status = NI6259AI.niLib.pxi6259_set_ai_attribute(aiConf, self.AI_START_SELECT, self.AI_START_SELECT_PFI1)
+                        self.debugPrint('AI_START_SELECT_PFI1 %d'%(status) ) 
                     else:
                         self.debugPrint("1 OK AI_START_SELECT_RTSI1")
                         status = NI6259AI.niLib.pxi6259_set_ai_attribute(aiConf, self.AI_START_SELECT, self.AI_START_SELECT_RTSI1)
                     if( status == 0 ):
                         status = NI6259AI.niLib.pxi6259_set_ai_attribute(aiConf, self.AI_START_POLARITY, self.AI_START_POLARITY_RISING_EDGE)
+                        self.debugPrint('AI_START_POLARITY_RISING_EDGE %d'%(status) ) 
                     if( status != 0 ):
                         Data.execute('DevLogErr($1,$2)', self.getNid(), 'Cannot set external trigger')
                         raise DevBAD_PARAMETER                    
@@ -540,7 +552,10 @@ class NI6259AI(Device):
             if(trigMode == 'EXTERNAL_PFI1' or trigMode == 'EXTERNAL_RTSI1' or trigMode == 'SW_RTSI1'):
                 trigSource = self.trig_source.data()
             else:
-                trigSource = 0
+                try:
+                    trigSource = self.trig_source.data()
+		except:
+		    trigSource = 0;
             self.debugPrint('PXI 6259 Trigger source: ',trigSource)
         except:
             Data.execute('DevLogErr($1,$2)', self.getNid(), 'Cannot resolve Trigger source')
@@ -727,7 +742,6 @@ class NI6259AI(Device):
 #Module in acquisition check
         try:
             self.restoreWorker()
-            print 'Chech Start Store'
             if self.worker.isAlive():
                Data.execute('DevLogErr($1,$2)', self.getNid(), 'Module is in acquisition')
                return

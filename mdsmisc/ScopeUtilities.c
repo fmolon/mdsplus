@@ -77,7 +77,7 @@ static double to_doublex(const void *const ptr, const dtype_t dtype, const doubl
       return (double)*(int32_t *)ptr;
     case DTYPE_Q:
     case DTYPE_QU:
-      if (is_time) return ((double)*(int64_t *)ptr)/1e9;
+      if (is_time) return ((double)*(int64_t *)ptr);
       return (double)*(int64_t *)ptr;
     default:
       printf("Unsupported Type in getData\n");
@@ -112,9 +112,9 @@ static int recIsSegmented(const mdsdsc_t *const dsc) {
 	};
 	status = TreeGetNci(nid, nciList);
 	if (STATUS_OK
-         &&( nciClass == CLASS_R
-          ||(nciClass == CLASS_S
-            &&( nciDtype == DTYPE_NID
+	 &&( nciClass == CLASS_R
+	  ||(nciClass == CLASS_S
+	    &&( nciDtype == DTYPE_NID
 	      ||nciDtype == DTYPE_PATH)
 	 ))) {
 	  status = TreeGetRecord(nid, &xd);
@@ -129,7 +129,7 @@ static int recIsSegmented(const mdsdsc_t *const dsc) {
 	memcpy(path, dsc->pointer, dsc->length);
 	path[dsc->length] = 0;
 	status = TreeFindNode(path, &nid);
-        free(path);
+	free(path);
 	if STATUS_OK
 	  status = TreeGetNumSegments(nid, &numSegments);
 	if (STATUS_OK && numSegments > 0)
@@ -177,23 +177,23 @@ inline static int64_t estimateNumSamples(const mdsdsc_t *const dsc, mdsdsc_t *co
   int nextRow, segmentSamples, numActSegments, segmentIdx;
   EMPTYXD(xd);
   int nid = recIsSegmented(dsc);
-  if(!nid) return -1;
+  if(!nid) goto return_neg1;
   int status = TreeGetNumSegments(nid, &numSegments);
-  if STATUS_NOT_OK return -1;
+  if STATUS_NOT_OK goto return_neg1;
   if(xMin != NULL || xMax != NULL) {
     if(xMin) XTreeConvertToLongTime(xMin, &startTime);
     if(xMax) XTreeConvertToLongTime(xMax,   &endTime);
-    if(numSegments < NUM_SEGMENTS_THRESHOLD) return -1;
+    if(numSegments < NUM_SEGMENTS_THRESHOLD) goto return_neg1;
     startIdx = 0; //If no start time specified, take all initial segments
     if(xMin) {
       while(startIdx < numSegments) {
-        status = TreeGetSegmentLimits(nid, startIdx, NULL, &xd);
-        if STATUS_NOT_OK goto return_neg1;
-        status = XTreeConvertToLongTime(xd.pointer, &currEnd);
-        if STATUS_NOT_OK goto return_neg1;
-        if(currEnd >= startTime) //First overlapping segment
-          break;
-        startIdx++;
+	status = TreeGetSegmentLimits(nid, startIdx, NULL, &xd);
+	if STATUS_NOT_OK goto return_neg1;
+	status = XTreeConvertToLongTime(xd.pointer, &currEnd);
+	if STATUS_NOT_OK goto return_neg1;
+	if(currEnd >= startTime) //First overlapping segment
+	  break;
+	startIdx++;
       }
     }
     if(startIdx == numSegments) goto return_neg1;//All segments antecedent to start time
@@ -202,13 +202,13 @@ inline static int64_t estimateNumSamples(const mdsdsc_t *const dsc, mdsdsc_t *co
     else {
       segmentIdx = startIdx;
       while(segmentIdx < numSegments) {
-        status = TreeGetSegmentLimits(nid, segmentIdx, NULL, &xd);
-        if STATUS_NOT_OK goto return_neg1;
-        status = XTreeConvertToLongTime(xd.pointer, &currEnd);
-        if STATUS_NOT_OK goto return_neg1;
-        if(currEnd >= endTime) //Last overlapping segment
-          break;
-        segmentIdx++;
+	status = TreeGetSegmentLimits(nid, segmentIdx, NULL, &xd);
+	if STATUS_NOT_OK goto return_neg1;
+	status = XTreeConvertToLongTime(xd.pointer, &currEnd);
+	if STATUS_NOT_OK goto return_neg1;
+	if(currEnd >= endTime) //Last overlapping segment
+	  break;
+	segmentIdx++;
       }
       //No segment (section) after end
       endIdx = (segmentIdx == numSegments) ? numSegments - 1 : segmentIdx;
@@ -237,6 +237,12 @@ inline static int64_t estimateNumSamples(const mdsdsc_t *const dsc, mdsdsc_t *co
   *estimatedSegmentSamples = segmentSamples;
   return segmentSamples * (int64_t)numActSegments;
 return_neg1: ;
+  if (xMin && IS_OK(TdiData(xMin, &xd MDS_END_ARG)))
+    *dMin = to_doublex(xd.pointer->pointer,xd.pointer->dtype,-INFINITY,TRUE);
+  else *dMin = -INFINITY;
+  if (xMax && IS_OK(TdiData(xMax, &xd MDS_END_ARG)))
+    *dMax = to_doublex(xd.pointer->pointer,xd.pointer->dtype, INFINITY,TRUE);
+  else *dMax =  INFINITY;
   MdsFree1Dx(&xd, NULL);
   return -1;
 }
@@ -283,10 +289,10 @@ static inline void trimData(float *const y, mdsdsc_a_t *const x, const int nSamp
       }
       curIdx += (actSamples+1)/2; // half step ensures outIdx != curIdx
       if (outIdx<curIdx)
-        memcpy(&x->pointer[outIdx * x->length], &x->pointer[curIdx * x->length], x->length);
+	memcpy(&x->pointer[outIdx * x->length], &x->pointer[curIdx * x->length], x->length);
       y[outIdx++] = minY;
       if (outIdx<curIdx)
-        memcpy(&x->pointer[outIdx * x->length], &x->pointer[curIdx * x->length], x->length);
+	memcpy(&x->pointer[outIdx * x->length], &x->pointer[curIdx * x->length], x->length);
       y[outIdx++] = maxY;
       curIdx +=  actSamples/2;
     }
@@ -303,22 +309,22 @@ again: ;
     case CLASS_S:
       if(dsc->dtype == DTYPE_NID || dsc->dtype == DTYPE_PATH) {
 	int nid;
-        if(dsc->dtype == DTYPE_NID)
+	if(dsc->dtype == DTYPE_NID)
 	  nid = *(int *)dsc->pointer;
-        else {//if(dsc->dtype == DTYPE_PATH)
+	else {//if(dsc->dtype == DTYPE_PATH)
 	  char* path = malloc(dsc->length + 1);
 	  memcpy(path, dsc->pointer, dsc->length);
 	  path[dsc->length] = 0;
 	  status = TreeFindNode(path, &nid);
-          free(path);
+	  free(path);
 	  if STATUS_NOT_OK goto status_not_ok_out;
-        }
+	}
 	int numSegments;
 	status = TreeGetNumSegments(nid, &numSegments);
 	if (STATUS_NOT_OK || numSegments > 0)
 	  goto error_out;
 	EMPTYXD(xd);
-	             status = TreeGetRecord(nid, &xd);
+		     status = TreeGetRecord(nid, &xd);
 	if STATUS_OK status = recGetXxxx(xd.pointer,xd_out,getHelp);
 	MdsFree1Dx(&xd, NULL);
 	goto status_out;
@@ -382,11 +388,11 @@ again: ;
 	    status = recGetXxxx(rDsc->dscptrs[0], xd_out, getHelp);
 	    if STATUS_NOT_OK goto status_not_ok_out;
 	    EMPTYXD(xd);
-            for(i = 1; i < rDsc->ndesc; i++) {
+	    for(i = 1; i < rDsc->ndesc; i++) {
 	      status = recGetXxxx(rDsc->dscptrs[i], &xd, getHelp);
 	      if (STATUS_NOT_OK
 	       || xd.pointer->length != xd_out->pointer->length
-               || strncmp(xd.pointer->pointer, xd_out->pointer->pointer, xd.pointer->length)) {
+	       || strncmp(xd.pointer->pointer, xd_out->pointer->pointer, xd.pointer->length)) {
 		MdsFree1Dx(&xd, NULL);
 		goto error_out;//Different units
 	      }
@@ -422,7 +428,7 @@ again: ;
 	      goto success;
 	    }
 	  }
-        }
+	}
       }
       break;
     default: break;
@@ -610,8 +616,8 @@ static inline int getXArray(const mdsdsc_a_t *const xArrD, const int retSamples,
       for(i = 0; i < retSamples; i++, idx += 8) {
 	*((double *)&retArr[idx]) = *((double *)(&xArrD->pointer[i*xArrD->length]));
 	swap8(&retArr[idx]);
-	break;
       }
+      break;
   }
   return idx;
 }
@@ -622,7 +628,7 @@ EXPORT int GetXYSignalXd(mdsdsc_t *const inY, mdsdsc_t *const inX, mdsdsc_t *con
   EMPTYXD(xXd);
   int estimatedSegmentSamples = 0;
   double xmin = -INFINITY, xmax = INFINITY, delta;
-  mdsdsc_t *xMinP,*xMaxP,*deltaP, deltaD = {0, 0, CLASS_S, 0};
+  mdsdsc_t *xMinP,*xMaxP,*deltaP, deltaD = {sizeof(double), DTYPE_DOUBLE, CLASS_S, (char* )&delta};
   int64_t estimatedSamples = estimateNumSamples(inY, inXMin, inXMax, &estimatedSegmentSamples, &xmin, &xmax);
   const double estimatedDuration = xmax - xmin;
   xMinP = (xmin > -INFINITY) ? inXMin : NULL;

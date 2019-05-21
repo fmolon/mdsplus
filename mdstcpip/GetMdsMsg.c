@@ -39,25 +39,26 @@ static int GetBytesTO(Connection* c, void *buffer, size_t bytes_to_recv, int to_
     while (bytes_to_recv > 0 && (tries < 10)) {
       ssize_t bytes_recv;
       if (c->io->recv_to && to_msec>=0) // don't use timeout if not available or requested
-        bytes_recv = c->io->recv_to(c, bptr, bytes_to_recv, to_msec);
+	bytes_recv = c->io->recv_to(c, bptr, bytes_to_recv, to_msec);
       else
-        bytes_recv = c->io->recv(c, bptr, bytes_to_recv);
+	bytes_recv = c->io->recv(c, bptr, bytes_to_recv);
       if (bytes_recv > 0) {
 	tries = 0;
 	bytes_to_recv -= bytes_recv;
 	bptr += bytes_recv;
-        continue;
+	tries = 0;
+	continue;
       }
       if (errno==ETIMEDOUT)            return TdiTIMEOUT;
       if (bytes_recv==0 && to_msec>=0) return TdiTIMEOUT;
       if (errno != EINTR) {
-          if (errno) {fprintf(stderr,"Connection %02d (r:%d)",c->id,(int)bytes_recv);perror("error");}
-          return MDSplusERROR;
+	  if (errno) {fprintf(stderr,"Connection %02d (r:%d)",c->id,(int)bytes_recv);perror("error");}
+	  return MDSplusERROR;
       }
       tries++;
     }
-    if (tries >= 10) {
-      fprintf(stderr, "\rrecv failed for connection %d: too many EINTR's", c->id);
+    if (tries > 10) {
+      fprintf(stderr, "Connection %d possibly lost: encountered > 10 EINTRs\n", c->id);
       return SsINTERNAL;
     }
     return MDSplusSUCCESS;
@@ -71,8 +72,7 @@ static int GetBytesTO(Connection* c, void *buffer, size_t bytes_to_recv, int to_
 
 Message *GetMdsMsgTOC(Connection* c, int *status, int to_msec){
   MsgHdr header;
-  Message *msg = 0;
-  int msglen = 0;
+  Message *msg = NULL;
   //MdsSetClientAddr(0);
   *status = GetBytesTO(c, (void *)&header, sizeof(MsgHdr), to_msec);
   if IS_OK(*status) {
@@ -85,29 +85,26 @@ Message *GetMdsMsgTOC(Connection* c, int *status, int to_msec){
 	 header.message_id, header.dtype);
     printf("client_type = %d\nndims = %d\n", header.client_type, header.ndims);
 #endif
-    if (CType(header.client_type) > CRAY_CLIENT || header.ndims > MAX_DIMS) {
+    uint32_t msglen = (uint32_t)header.msglen;
+    if (msglen < sizeof(MsgHdr) || CType(header.client_type) > CRAY_CLIENT || header.ndims > MAX_DIMS) {
       fprintf(stderr,
 	      "\rGetMdsMsg shutdown connection %d: bad msg header, header.ndims=%d, client_type=%d\n",
 	      c->id, header.ndims, CType(header.client_type));
       *status = SsINTERNAL;
       return NULL;
     }
-    msglen = header.msglen;
-    msg = malloc(header.msglen);
+    unsigned long dlen = msglen - sizeof(MsgHdr);
+    msg = malloc(msglen);
     msg->h = header;
     *status = GetBytesTO(c, msg->bytes, msglen - sizeof(MsgHdr), 1000);
     if (IS_OK(*status) && IsCompressed(header.client_type)) {
       Message *m;
-      unsigned long dlen;
       memcpy(&msglen, msg->bytes, 4);
       if (Endian(header.client_type) != Endian(ClientType()))
 	FlipBytes(4, (char *)&msglen);
       m = malloc(msglen);
       m->h = header;
-      dlen = msglen - sizeof(MsgHdr);
-      *status =
-	  uncompress((unsigned char *)m->bytes, &dlen, (unsigned char *)msg->bytes + 4,
-		     header.msglen - sizeof(MsgHdr) - 4) == 0;
+      *status = uncompress((unsigned char *)m->bytes, &dlen, (unsigned char *)msg->bytes + 4, dlen - 4) == 0;
       if IS_OK(*status) {
 	m->h.msglen = msglen;
 	free(msg);
@@ -125,8 +122,10 @@ Message *GetMdsMsgTOC(Connection* c, int *status, int to_msec){
 Message* GetMdsMsgTO(int id, int *status, int to_msec){
   Connection* c = FindConnection(id, NULL);
   Message* msg = GetMdsMsgTOC(c, status, to_msec);
-  if (!msg && *status==SsINTERNAL)
+  if (!msg && *status==SsINTERNAL) {
     DisconnectConnection(id);
+    *status = MDSplusERROR;
+  }
   return msg;
 }
 
