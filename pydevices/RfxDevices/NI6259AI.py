@@ -263,7 +263,7 @@ class NI6259AI(Device):
             #trigSource = self.device.trig_source.data()
             clockSource = self.device.clock_source.evaluate()
 
-            frequency = float( clockSource.getDelta() )
+            period = float( clockSource.getDelta() )
 
 
             if( acqMode == 'TRANSIENT REC.'):
@@ -354,7 +354,7 @@ class NI6259AI(Device):
             timeAt0 = startTime
 
             while not self.stopReq:
-                status = NI6259AI.niInterfaceLib.pxi6259_readAndSaveAllChannels(c_int(len(self.chanMap)), chanFd_c, c_int(bufSize), c_int(segmentSize), c_int(sampleToSkip), c_int(numSamples), c_float( timeAt0 ), c_float(frequency), chanNid_c, self.device.clock_source.getNid(), self.treePtr, saveList, self.stopAcq)
+                status = NI6259AI.niInterfaceLib.pxi6259_readAndSaveAllChannels(c_int(len(self.chanMap)), chanFd_c, c_int(bufSize), c_int(segmentSize), c_int(sampleToSkip), c_int(numSamples), chanNid_c, self.device.clock_source.getNid(), c_float( timeAt0 ), c_float(period), self.treePtr, saveList, self.stopAcq)
 
    ##Check termination
                 if ( numSamples > 0 or (transientRec and status == -1) ):
