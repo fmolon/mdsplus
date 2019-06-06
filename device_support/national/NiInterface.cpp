@@ -302,8 +302,20 @@ class SaveItem {
 //Streaming stuff
 	if(streamName && streamFactor > 0 && (counter % streamFactor) == 0)
 	{
-//printf("STREAM %d %s %f %f\n", shot, streamName, (float)(period * counter + timeIdx0), (dataType == SHORT)?((short *)buffer)[0]:((float *)buffer)[0]);
-	    EventStream::send(shot, streamName, (float)(period * counter + timeIdx0), (dataType == SHORT)?((short *)buffer)[0]:((float *)buffer)[0]);
+
+	    //Computation of value to be streamed
+	    try {
+		Data *nidData = new Int32(dataNid);
+		float rawSample = (float)((dataType == SHORT)?((short *)buffer)[0]:((float *)buffer)[0]);
+		Data *sampleData = new Float32(rawSample);
+		Data *streamValD = executeWithArgs("NiConvertStream($1,$2)", (Tree *)treePtr, 2, nidData, sampleData);
+		float sample = streamValD->getFloat(); 
+		//printf("STREAM %d %s %f %f\n", shot, streamName, (float)(period * counter + timeIdx0), (dataType == SHORT)?((short *)buffer)[0]:((float *)buffer)[0]);
+	    	EventStream::send(shot, streamName, (float)(period * counter + timeIdx0), sample);
+	    }catch(MdsException &exc)
+	    {
+		printf("Cannot convert stream sample: %s\n", exc.what());
+	    }
 	}
 	    
 
