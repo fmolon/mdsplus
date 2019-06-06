@@ -1235,7 +1235,8 @@ void TreeNode::putSegmentResampled(Array *data, int ofs, TreeNode*resampledNode,
 		resSamples[i/RES_FACTOR] = avgVal;
 	}
 	AutoData<Array> resData(new Float32Array(resSamples, numRows/RES_FACTOR));
-	resampledNode->putSegment(resData, ofs);
+	if(numRows > RES_FACTOR)
+	    resampledNode->putSegment(resData, ofs);
 	delete[] arrSamples;
 	delete[] resSamples;
 
