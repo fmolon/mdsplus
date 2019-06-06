@@ -302,7 +302,7 @@ class SaveItem {
 //Streaming stuff
 	if(streamName && streamFactor > 0 && (counter % streamFactor) == 0)
 	{
-printf("STREAM %d %s %f %f\n", shot, streamName, (float)(period * counter + timeIdx0), (dataType == SHORT)?((short *)buffer)[0]:((float *)buffer)[0]);
+//printf("STREAM %d %s %f %f\n", shot, streamName, (float)(period * counter + timeIdx0), (dataType == SHORT)?((short *)buffer)[0]:((float *)buffer)[0]);
 	    EventStream::send(shot, streamName, (float)(period * counter + timeIdx0), (dataType == SHORT)?((short *)buffer)[0]:((float *)buffer)[0]);
 	}
 	    
@@ -580,7 +580,11 @@ int pxi6259_getCalibrationParams(int chanfd, int range, float *coeffVal, int *co
 
     printf("order %d\n", ai_coefs.order);
     printf("scale_converter_select_t %d\n", ai_coefs.converter);
-    for( i = 0; i < 4; i++)
+*/
+    for( i = 0; i <= ai_coefs.order; i++)
+        coeffVal[i] = ai_coefs.value[i].f;
+    *coeff_num = ai_coefs.order+1;
+/*
 	printf("value[%d].f = %e\n", i, ai_coefs.value[i].f);
 
     printf("mode order %d\n", ai_coefs.mode.order);
@@ -590,6 +594,8 @@ int pxi6259_getCalibrationParams(int chanfd, int range, float *coeffVal, int *co
     printf("interval.gain   %e\n", ai_coefs.interval.gain.f);
     printf("interval.offset %e\n", ai_coefs.interval.offset.f);
 */
+
+/*
 	for (i=0; i <= ai_coefs.order; i++)
 	{
 		coeffVal[i] = (ai_coefs.mode.value[i].f * ai_coefs.interval.gain.f);
@@ -598,10 +604,6 @@ int pxi6259_getCalibrationParams(int chanfd, int range, float *coeffVal, int *co
 		}
 	}
 	*coeff_num = ai_coefs.order+1;
-
-/*
-    for (j = NUM_AI_SCALING_COEFFICIENTS - 1; j >= 0; j--) 
-         printf("Coeff[%d] : %e\n",  j, coeffVal[j] );
 */
     return retval;
 }
@@ -801,8 +803,6 @@ int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int s
 	delete(dataNode);
     }
     triggered = 0;	
-printf("STREAM ASSEGNATO\n");
- 
     // Start main acquisition loop
     while( !(*(int*)stopAcq) )
     {
@@ -1041,7 +1041,6 @@ int pxi6259_readAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int 
             delete currNode;
 	    if(resampledNid)
 	    {
-printf("RESAMPLED: %d\n", resampledNid[i]);
 		  currNode = new TreeNode(resampledNid[i], (Tree *)treePtr);
 		  currNode->deleteData();
 		  delete currNode;
