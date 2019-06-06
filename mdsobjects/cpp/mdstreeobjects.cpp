@@ -1090,7 +1090,7 @@ void TreeNode::makeSegmentResampled(Data *start, Data *end, Data *time, Array *i
 	//Resampled array always converted to float, Assumed 1D array
 	int numRows;
 	float *arrSamples = initialData->getFloatArray(&numRows);
-	float *resSamples = new float[numRows/RES_FACTOR];
+	float *resSamples = new float[numRows/RES_FACTOR + 1];
 	for(int i = 0; i < numRows; i+= RES_FACTOR)
 	{
 		float avgVal = arrSamples[i];
@@ -1137,7 +1137,7 @@ void TreeNode::beginSegmentResampled(Data *start, Data *end, Data *time, Array *
 	//Resampled aray always converted to float, Assumed 1D array
 	int numRows;
 	float *arrSamples = initialData->getFloatArray(&numRows);
-	float *resSamples = new float[numRows/RES_FACTOR];
+	float *resSamples = new float[numRows/RES_FACTOR + 1];
 	for(int i = 0; i < numRows; i+= RES_FACTOR)
 	{
 		float avgVal = arrSamples[i];
@@ -1172,7 +1172,7 @@ void TreeNode::beginSegmentMinMax(Data *start, Data *end, Data *time, Array *ini
 	//Resampled aray always converted to float, Assumed 1D array
 	int numRows;
 	float *arrSamples = initialData->getFloatArray(&numRows);
-	float *resSamples = new float[2* numRows/resFactor]; //It has top keep minimum and maximum. Ensure enough room even if numRows is not a multiplier of resFactor
+	float *resSamples = new float[2* numRows/resFactor + 1]; //It has top keep minimum and maximum. Ensure enough room even if numRows is not a multiplier of resFactor
 	for(int i = 0; i < numRows; i+= resFactor)
 	{
 		float minVal = arrSamples[i];
@@ -1223,7 +1223,7 @@ void TreeNode::putSegmentResampled(Array *data, int ofs, TreeNode*resampledNode,
 	//Resampled aray always converted to float, Assumed 1D array
 	int numRows;
 	float *arrSamples = data->getFloatArray(&numRows);
-	float *resSamples = new float[numRows/RES_FACTOR];
+	float *resSamples = new float[numRows/RES_FACTOR + 1];
 	for(int i = 0; i < numRows; i+= RES_FACTOR)
 	{
 		float avgVal = arrSamples[i];
@@ -1246,7 +1246,7 @@ void TreeNode::putSegmentMinMax(Array *data, int ofs, TreeNode*resampledNode, in
 	//Resampled aray always converted to float, Assumed 1D array
 	int numRows;
 	float *arrSamples = data->getFloatArray(&numRows);
-	float *resSamples = new float[2* numRows/resFactor]; //It has top keep minimum and maximum. Ensure enough room even if numRows is not a multiplier of resFactor
+	float *resSamples = new float[2* numRows/resFactor + 1]; //It has top keep minimum and maximum. Ensure enough room even if numRows is not a multiplier of resFactor
 	for(int i = 0; i < numRows; i+= resFactor)
 	{
 		float minVal = arrSamples[i];
