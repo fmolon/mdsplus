@@ -165,6 +165,7 @@ A3248Setup.java \
 MARTE_DUTY_CYCLESetup.java \
 SPIDER_SETUPSetup.java \
 RFX_RPADCSetup.java \
+STREAM_SETUPSetup.java \
 PI_CAMSetup.java \
 PI_SCT320Setup.java\
 SPECTRO_CFGSetup.java \

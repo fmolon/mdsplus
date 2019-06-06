@@ -85,6 +85,9 @@ class NI6259AI(Device):
     parts.append({'path':':CONV_CLK', 'type':'numeric','value':20})
     parts.append({'path':':SERIAL_NUM', 'type':'numeric'})
 
+    for i in range(0,32):
+        parts.append({'path':'.CHANNEL_%d:RES_RAW'%(i+1), 'type':'signal', 'options':('no_write_model', 'no_compress_on_put')  })
+
 
 #File descriptor
     fd = 0
@@ -271,6 +274,7 @@ class NI6259AI(Device):
 
             chanFd = []
             chanNid = []
+            resNid = []
 
             coeff_array = c_float*4
             coeff = coeff_array();
@@ -286,6 +290,7 @@ class NI6259AI(Device):
 
                     chanNid.append( getattr(self.device, 'channel_%d_data_raw'%(self.chanMap[chan]+1)).getNid() )
                     #self.device.debugPrint "chanFd "+'channel_%d_data'%(self.chanMap[chan]+1), chanFd[chan], " chanNid ", chanNid[chan]
+                    resNid.append( getattr(self.device, 'channel_%d_res_raw'%(self.chanMap[chan]+1)).getNid() )
 
                     gain = getattr(self.device, 'channel_%d_range'%(self.chanMap[chan]+1)).data()
                     gain_code = self.device.gainDict[gain]
@@ -310,7 +315,7 @@ class NI6259AI(Device):
                     Data.execute('DevLogErr($1,$2)', self.device.getNid(), 'Cannot open Channel '+ str(self.chanMap[chan]))
                     self.error = self.ACQ_ERROR;
                     return 
-
+            print('SEGEMNT SIZE PRIMA: ', segmentSize)
             if( not transientRec ):
 
                 if(bufSize > segmentSize):
@@ -335,6 +340,7 @@ class NI6259AI(Device):
 
 
             status = NI6259AI.niLib.pxi6259_start_ai(c_int(self.fd))
+            print('SEGEMNT SIZE DOPO: ', segmentSize)
 
             if(status != 0):
                 Data.execute('DevLogErr($1,$2)', self.device.getNid(), 'Cannot Start Acquisition ')
@@ -346,15 +352,17 @@ class NI6259AI(Device):
             NI6259AI.niInterfaceLib.startSave(byref(saveList))
             #count = 0
 
+            val = 0
             chanNid_c = (c_int * len(chanNid) )(*chanNid)
             chanFd_c = (c_int * len(chanFd) )(*chanFd)
-
+            resNid_c = (c_int * len(resNid))(*resNid)
+ 
             #timeAt0 = trigSource + startTime
             #self.device.debugPrint("PXI 6259 TIME AT0 ", numSamples)            
             timeAt0 = startTime
 
             while not self.stopReq:
-                status = NI6259AI.niInterfaceLib.pxi6259_readAndSaveAllChannels(c_int(len(self.chanMap)), chanFd_c, c_int(bufSize), c_int(segmentSize), c_int(sampleToSkip), c_int(numSamples), chanNid_c, self.device.clock_source.getNid(), c_float( timeAt0 ), c_float(period), self.treePtr, saveList, self.stopAcq)
+                status = NI6259AI.niInterfaceLib.pxi6259_readAndSaveAllChannels(c_int(len(self.chanMap)), chanFd_c, c_int(bufSize), c_int(segmentSize), c_int(sampleToSkip), c_int(numSamples), chanNid_c, self.device.clock_source.getNid(), c_float( timeAt0 ), c_float(period), self.treePtr, saveList, self.stopAcq, c_int(self.device.getTree().shot), resNid_c)
 
    ##Check termination
                 if ( numSamples > 0 or (transientRec and status == -1) ):
@@ -422,8 +430,9 @@ class NI6259AI(Device):
                     
             #Empy the node which will contain  the segmented data   
             getattr(self, 'channel_%d_data_raw'%(chan+1)).deleteData()
-
             getattr(self, 'channel_%d_data_raw'%(chan+1)).setCompressOnPut(False)
+            getattr(self, 'channel_%d_res_raw'%(chan+1)).deleteData()
+            getattr(self, 'channel_%d_res_raw'%(chan+1)).setCompressOnPut(False)
             try:
                 enabled = self.enableDict[getattr(self, 'channel_%d_state'%(chan+1)).data()]
                 polarity = self.polarityDict[getattr(self, 'channel_%d_polarity'%(chan+1)).data()]
@@ -699,7 +708,6 @@ class NI6259AI(Device):
             preTrigger = nSamples - endIdx
             """
             self.debugPrint('PXI 6259 nSamples   = ', Int32(int(nSamples)))
-            self.seg_length.putData(Int32(int(nSamples)))
 
 #           status = NI6259AI.niLib.pxi6259_set_ai_number_of_samples(aiConf, c_int(postTrigger), c_int(preTrigger), 0)
 

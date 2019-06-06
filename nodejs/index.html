@@ -428,6 +428,8 @@ var vm = new Vue({
     isVisibleConfiguration: true,
     isVisibleAddPanel: false,
     isRunningGraph: false,
+    lastShotNumber: -2,
+    versionNumber: '20190604150000',
     restylevent: null,
    } // end return
   },
@@ -594,13 +596,14 @@ var vm = new Vue({
             // we found the incoming signal in this panel
             //
 	    this.charts[i].traces[j].name = msgSignalName;
-            if (msgFormat == "A") {
+            if (msgFormat == "A" || this.lastShotNumber != msgShotNumber) {
                 this.charts[i].traces[j].x = msgLabels;
                 this.charts[i].traces[j].y = msgValues;
             } else {
                 this.charts[i].traces[j].x = this.charts[i].traces[j].x.concat(msgLabels);
                 this.charts[i].traces[j].y = this.charts[i].traces[j].y.concat(msgValues);
             }
+            this.lastShotNumber = msgShotNumber;
             //console.log(this.panels[i].windowLength + " " + this.charts[i].traces[j].x.length);
             if (this.panels[i].windowLength > 0 && this.charts[i].traces[j].x.length > this.panels[i].windowLength) {
               this.charts[i].traces[j].x = this.charts[i].traces[j].x.slice(-this.panels[i].windowLength);

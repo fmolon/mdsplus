@@ -75,6 +75,8 @@ class NI6368AI(Device):
         'options':('no_write_shot',)})
 
     parts.append({'path':':SERIAL_NUM', 'type':'numeric'})
+    for i in range(0,16):
+        parts.append({'path':'.CHANNEL_%d:RES_RAW'%(i+1), 'type':'signal', 'options':('no_write_model', 'no_compress_on_put')  })
 
     
 #File descriptor
@@ -284,6 +286,7 @@ class NI6368AI(Device):
 
             chanFd = []
             chanNid = []
+            resNid = []
             saveList = c_void_p(0)
 
 
@@ -301,6 +304,7 @@ class NI6368AI(Device):
                     chanFd.append(currFd)
                     chanNid.append( getattr(self.device, 'channel_%d_data_raw'%(self.chanMap[chan]+1)).getNid() )
                     #self.device.debugPrint("chanFd "+'channel_%d_data_raw'%(self.chanMap[chan]+1), chanFd[chan], " chanNid ", chanNid[chan]
+                    resNid.append( getattr(self.device, 'channel_%d_res_raw'%(self.chanMap[chan]+1)).getNid() )
                     gain = getattr(self.device, 'channel_%d_range'%(self.chanMap[chan]+1)).data()
                     gain_code = self.device.gainDict[gain]
                     status = NI6368AI.niInterfaceLib.getCalibrationParams(currFd, gain_code, coeff)
@@ -317,6 +321,9 @@ class NI6368AI(Device):
                     self.error = self.ACQ_ERROR;                    
                     return
 
+	    #Make sure hbuf size is a multiple of 100 not to break putSegmentResampled
+            if bufSize % 100 != 0:
+                bufSize = 100 * (bufSize/100 +1) 
 
             if(bufSize > segmentSize):
                 segmentSize = bufSize
@@ -346,6 +353,7 @@ class NI6368AI(Device):
 
             chanNid_c = (c_int * len(chanNid) )(*chanNid)
             chanFd_c = (c_int * len(chanFd) )(*chanFd)
+            resNid_c = (c_int * len(resNid))(*resNid)
 
             trigCount = 0
 
@@ -365,7 +373,8 @@ class NI6368AI(Device):
 
 
             while not self.stopReq:
-                status = NI6368AI.niInterfaceLib.xseriesReadAndSaveAllChannels(c_int(len(self.chanMap)), chanFd_c, c_int(bufSize), c_int(segmentSize), c_int(sampleToSkip), c_int(numSamples), c_float( timeAt0 ), c_float(frequency), chanNid_c, self.device.clock_source.getNid(), self.treePtr, saveList, self.stopAcq)
+                status = NI6368AI.niInterfaceLib.xseriesReadAndSaveAllChannels(c_int(len(self.chanMap)), chanFd_c, c_int(bufSize), c_int(segmentSize), c_int(sampleToSkip), c_int(numSamples), c_float( timeAt0 ), c_float(frequency), chanNid_c, self.device.clock_source.getNid(), self.treePtr, saveList, self.stopAcq,
+		c_int(self.device.getTree().shot), resNid_c)
    ##Check termination
                 trigCount += 1
                 #self.device.debugPrint("PXI 6368 Trigger count %d num %d num smp %d status %d " %(trigCount , numTrigger, numSamples, status) )
