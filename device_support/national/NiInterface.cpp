@@ -306,12 +306,37 @@ class SaveItem {
 	    //Computation of value to be streamed
 	    try {
 		Data *nidData = new Int32(dataNid);
-		float rawSample = (float)((dataType == SHORT)?((short *)buffer)[0]:((float *)buffer)[0]);
-		Data *sampleData = new Float32(rawSample);
-		Data *streamValD = executeWithArgs("NiConvertStream($1,$2)", (Tree *)treePtr, 2, nidData, sampleData);
-		float sample = streamValD->getFloat(); 
-		//printf("STREAM %d %s %f %f\n", shot, streamName, (float)(period * counter + timeIdx0), (dataType == SHORT)?((short *)buffer)[0]:((float *)buffer)[0]);
-	    	EventStream::send(shot, streamName, (float)(period * counter + timeIdx0), sample);
+		int sampleInterval = (int)(0.1/period);
+		if(sampleInterval < 1)
+		    sampleInterval = 1;
+		int numSamples = bufSize / sampleInterval;
+		if(numSamples < 1)
+		    numSamples = 1;
+//printf("NUM SAMPLES: %d  SAMPLE INTERVAL: %d\n", numSamples, sampleInterval);
+		float *samples = new float[numSamples];
+		float *times = new float[numSamples];
+		int actSamples = 0;
+		for(int sampleIdx = 0; sampleIdx < numSamples; sampleIdx++)
+		{
+		    if(sampleIdx * sampleInterval >= bufSize)
+		    break;
+		    float rawSample = (float)((dataType == SHORT)?((short *)buffer)[sampleIdx * sampleInterval]:((float *)buffer)[sampleIdx * sampleInterval]);
+		    Data *sampleData = new Float32(rawSample);
+		    Data *streamValD = executeWithArgs("NiConvertStream($1,$2)", (Tree *)treePtr, 2, nidData, sampleData);
+		    float sample = streamValD->getFloat(); 
+		    samples[actSamples] = sample;
+		    deleteData(sampleData);
+		    deleteData(streamValD);
+//		    times[actSamples] = period * (counter - bufSize + actSamples * sampleInterval) + timeIdx0;
+		    times[actSamples] = period * (counter + actSamples * sampleInterval) + timeIdx0;
+		    actSamples++; 
+		}
+		//printf("STREAM %d %s %d %f %f\n", shot, streamName, actSamples, times[0], samples[0]);
+	    	EventStream::send(shot, streamName, actSamples, times, samples);
+	    	//EventStream::send(shot, streamName, (float)(period * counter + timeIdx0), sample);
+		delete[] samples;
+		delete [] times;
+
 	    }catch(MdsException &exc)
 	    {
 		printf("Cannot convert stream sample: %s\n", exc.what());
@@ -928,8 +953,13 @@ printf("[>>>3] bufReadChanSmp[%d] = %d readChanSmp[%d] = %d readChanSmp[%d] = %d
                 if(!skipping)
                 {
 		    int streamFactor = (int)(0.1/period);
-		    if(streamFactor % bufSize != 0)
-			streamFactor = (bufSize + 1)*(streamFactor / bufSize);
+		    if(bufSize > streamFactor)
+			streamFactor = bufSize;
+		    else
+		    {
+		    	if(streamFactor % bufSize != 0)
+				streamFactor = (bufSize + 1)*(streamFactor / bufSize);
+		    }
 		    if(resampledNid)
 			saveList->addItem(((saveConv) ? (void *)buffers_f[chan] : (void *)buffers_s[chan] ), 
                                       bufReadChanSmp[chan], sampleToRead, ((saveConv) ? FLOAT  : SHORT ), segmentSize, 
@@ -1183,8 +1213,13 @@ int pxi6259_readAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int 
                 {
 
 		    int streamFactor = (int)(0.1/period);
-		    if(streamFactor % bufSize != 0)
-			streamFactor = (bufSize + 1)*(streamFactor / bufSize);
+		    if(bufSize > streamFactor)
+			streamFactor = bufSize;
+		    else
+		    {
+		    	if(streamFactor % bufSize != 0)
+				streamFactor = (bufSize + 1)*(streamFactor / bufSize);
+		    }
 
 		   if(resampledNid)
                    	saveList->addItem(((saveConv) ? (void *)buffers_f[chan] : (void *)buffers_s[chan] ), 
