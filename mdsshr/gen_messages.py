@@ -103,7 +103,7 @@ MDSplusException.statusDict[%(msgn_nosev)d] = %(fac)s%(msgnam)s
 """ % msg)
     f_inc.close()
 
-f_py=open("%s/mdsobjects/python/mdsExceptions.py"%sourcedir,'w')
+f_py=open("%s/python/MDSplus/mdsExceptions.py"%sourcedir,'w')
 f_py.write("""#
 # Copyright (c) 2017, Massachusetts Institute of Technology All rights reserved.
 #
@@ -169,7 +169,7 @@ class MDSplusException(MdsException):
     if message is not None:
         message = str(message)
         if len(message)>0:
-            self.message = "%s:\n%s"%(self.message,message)
+            self.message = "%s:%s"%(self.message,message)
     self.severity=self.severities[self.status & 7]
     super(Exception,self).__init__(self.message)
 

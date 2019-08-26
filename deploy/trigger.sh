@@ -61,7 +61,7 @@ OPTIONS
        can just cp the jar files from the trigger directory location.
 
    --make_epydocs
-       Build the python docs using epydoc. This will replace the mdsobjects/python/doc
+       Build the python docs using epydoc. This will replace the python/MDSplus/doc
        directory in the trigger sources with updated epydoc documentation. This requires
        epydoc to be installed and usable on the system running the trigger script.
 
@@ -251,7 +251,7 @@ parsecmd "$cmdopts"
 
 if [ ! -z "${MAKE_JARS}" ]
 then
-    if ( ! ${SRCDIR}/deploy/build.sh --make-jars --os=${MAKE_JARS} --workspace=${SRCDIR} > make_jars.log 2>&1 )
+    if ( ! ${SRCDIR}/deploy/build.sh --make-jars --os=${MAKE_JARS} --workspace=${SRCDIR} )
     then
 	RED
 	cat <<EOF >&2
@@ -269,7 +269,7 @@ fi
 
 if [ ! -z "${MAKE_EPYDOCS}" ]
 then
-    if ( ! ${SRCDIR}/mdsobjects/python/makedoc.sh ${SRCDIR}/mdsobjects/python/doc > make_epydocs.log 2>&1 )
+    if ( ! ${SRCDIR}/python/MDSplus/makedoc.sh ${SRCDIR}/python/MDSplus/doc )
     then
 	RED
 	cat <<EOF >&2
@@ -485,10 +485,8 @@ EOF
 fi
 if [ "$TAG_RELEASE" = "yes" ]
 then
-    if [ "$NEW_RELEASE" = "yes" ]
-    then
-      if ( git tag | grep last_release >/dev/null )
-      then 
+    if ( git tag | grep last_release >/dev/null )
+    then 
       	RELEASE_TAG=$(git describe --tags | cut -d- -f1,2,3,4)
       	curl --data @- "https://api.github.com/repos/MDSplus/mdsplus/releases?access_token=$(cat $KEYS/.git_token)" > ${WORKSPACE}/tag_release.log 2>&1 <<EOF
 {
@@ -527,8 +525,6 @@ EOF
 	     NORMAL
 	     exit 1
          fi
-      fi
     fi
 fi
 echo $opts > ${SRCDIR}/trigger.opts
-

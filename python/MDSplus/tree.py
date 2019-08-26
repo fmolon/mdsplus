@@ -219,7 +219,7 @@ class Nci(object):
     _IS_MEMBER=2
     SET_FLAGS          =( 1,_C.c_uint32,4,int)
     CLEAR_FLAGS        =( 2,_C.c_uint32,4,int)
-    TIME_INSERTED      =( 4,_C.c_uint64,8,int)
+    TIME_INSERTED      =( 4,_C.c_uint64,8,_scr.Uint64)
     OWNER_ID           =( 5,_C.c_uint32,4,int)
     CLASS              =( 6,_C.c_uint8 ,1,int)
     DTYPE              =( 7,_C.c_uint8 ,1,int)
@@ -249,7 +249,7 @@ class Nci(object):
     NUMBER_OF_ELTS     =(32,_C.c_uint32, 4,int)
     DATA_IN_NCI        =(33,_C.c_uint32, 4,bool)
     ERROR_ON_PUT       =(34,_C.c_uint32, 4,bool)
-    RFA                =(35,_C.c_uint64, 8,int)
+    RFA                =(35,_C.c_uint64, 8,_scr.Uint64)
     IO_STATUS          =(36,_C.c_uint32, 4,int)
     IO_STV             =(37,_C.c_uint32, 4,int)
     DTYPE_STR          =(38,_C.c_char_p,64,str)
@@ -717,8 +717,8 @@ class Tree(object):
                                               _C.c_int32(1)))
 
     def dir(self):
-        """list descendants of top"""
-        self.top.dir()
+        """Return current default dir"""
+        self.default.dir()
 
     def __dir__(self):
         """used for tab completion"""
@@ -882,7 +882,6 @@ class Tree(object):
         @param tree: Name of tree
         @type tree: str
         @param inc: Increment (default: 1)
-        @return shot: New current shot number for the specified tree
         @rtype int
         """
         if isinstance(self,(Tree,)): # instancemethod: args shifted by one
