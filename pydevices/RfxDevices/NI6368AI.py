@@ -428,6 +428,11 @@ class NI6368AI(Device):
             self.device.debugPrint('ASYNCH WORKER TERMINATED')
             NI6368AI.niInterfaceLib.stopSave(saveList)
             NI6368AI.niInterfaceLib.freeStopAcqFlag(self.stopAcq)
+
+            #On first test dosen't work   
+            #NI6368AI.niInterfaceLib.closeTree(self.treePtr)
+            #self.device.debugPrint('CLOSE TREE')
+
             self.device.closeInfo()
 
 #############End Inner class AsynchStore      
@@ -880,6 +885,7 @@ class NI6368AI(Device):
           self.worker.stop()
           self.worker.join()
           self.debugPrint("PXI 6368 worker thread stopped")
+
           error = self.worker.hasError()
       else:
           error = self.worker.hasError()

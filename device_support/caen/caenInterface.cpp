@@ -450,7 +450,7 @@ extern "C" int readAndSaveSegments(int32_t handle, int32_t vmeAddress, int numCh
               if ( status != 0 )
               {
 		  free(buff);
-	          onError("ASYNCH: Error reading data segment");
+	          printf("ASYNCH: Error reading data segment. Status: %d Ret Len: %d\n", status, retLen);
                   return 0;
               }
 

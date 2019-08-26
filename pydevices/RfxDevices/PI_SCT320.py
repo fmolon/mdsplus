@@ -188,6 +188,10 @@ class PI_SCT320(Device):
             Data.execute('DevLogErr($1,$2)', self.getNid(), 'Cannot compute lambda axis for grating %d : %s'%(grating, str(e)) )
     
 
+    """
+    Calibration values are stored in SPIDER_A pulse file. The saveSpiderSpectroCalib.py shell command routine save in the calibration device     
+    nodes a link reference to the relate node value in the SPECTRO_A pulse. 
+
     def load_calib(self):
 
         from openpyxl import load_workbook
@@ -373,7 +377,7 @@ class PI_SCT320(Device):
             raise mdsExceptions.TclFAILED_ESSENTIAL
         return 1
 
-
+    """
     
     def init(self):
 

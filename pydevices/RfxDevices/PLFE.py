@@ -313,8 +313,8 @@ class PLFE(Device):
                     else:
                          self.__getattr__('.BOARD_%02d.CONFIG.RD:CONTROL_TXT'%(i + 1)).putData('LOCAL')
 
-
-          gain_dict = {1000: 3, 100: 1, 10: 2, 1: 0}
+#          gain_dict = {1000: 3, 100: 1, 10: 2, 1: 0}
+          gain_dict = {1000: 3, 100: 2, 10: 1, 1: 0}
           out = []
           
           for i in range(6):
@@ -388,7 +388,8 @@ class PLFE(Device):
           
           filter_dict = {0: 'OFF', 1: 'ON'}
           trans_dict = {0: 'OFF', 1: 'ON'}
-          gain_dict = {3: 1000, 1: 100, 2: 10, 0: 1}          
+#          gain_dict = {3: 1000, 1: 100, 2: 10, 0: 1}
+          gain_dict = {3: 1000, 2: 100, 1: 10, 0: 1}          
           for i in range(6):
                self.__getattr__('.BOARD_%02d.SETUP.CHANNEL_01.RD:FILTER'%(i + 1)).putData(int(data2[i]['bits'][3]))
                self.__getattr__('.BOARD_%02d.SETUP.CHANNEL_01.RD:FILTER_TXT'%(i + 1)).putData(filter_dict[int(data2[i]['bits'][3])])
@@ -479,7 +480,8 @@ class PLFE(Device):
           control_dict = {0: 'LOCAL', 1: 'REMOTE'}
           filter_dict = {0: 'OFF', 1: 'ON'}
           trans_dict = {0: 'OFF', 1: 'ON'}
-          gain_dict = {3: 1000, 1: 100, 2: 10, 0: 1}
+#          gain_dict = {3: 1000, 1: 100, 2: 10, 0: 1}
+          gain_dict = {3: 1000, 2: 100, 1: 10, 0: 1}
 
           
 

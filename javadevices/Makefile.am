@@ -171,7 +171,8 @@ PI_SCT320Setup.java\
 SPECTRO_CFGSetup.java \
 NI6683RECSetup.java \
 LINCMOSSetup.java  \
-PLFESetup.java
+PLFESetup.java \
+CRIO_FAUSetup.java
 
 java_DATA = jDevices.jar
 

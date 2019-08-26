@@ -377,9 +377,14 @@ class NI6259AI(Device):
 
             for chan in range(len(self.chanMap)):
                 os.close(chanFd[chan])
-            #self.device.debugPrint 'ASYNCH WORKER TERMINATED'
+            self.device.debugPrint 'ASYNCH WORKER TERMINATED'
             NI6259AI.niInterfaceLib.stopSave(saveList)
             NI6259AI.niInterfaceLib.freeStopAcqFlag(self.stopAcq)
+
+            #On first test dosen't work  
+            #NI6259AI.niInterfaceLib.closeTree(self.treePtr)
+            #self.device.debugPrint('CLOSE TREE')
+
             self.device.closeInfo()
 
             return 

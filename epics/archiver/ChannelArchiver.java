@@ -731,15 +731,15 @@ public class ChannelArchiver
 	     if(recName == null)
 	        return;
 
-System.out.println("Spedisco evento  " + recName);
+//System.out.println("Spedisco evento  " + recName);
 
 	     long timeUTC = (time + POSIX_TIME_AT_EPICS_EPOCH)/1000000;
 
 
 	     try {
-	        java.lang.String streamEvent = ""+getCurrShot()+" "+recName+" F 1 "+timeUTC+" "+data.getFloat();
+	        java.lang.String streamEvent = ""+getCurrShot()+" "+recName+" L 1 "+timeUTC+" "+data.getFloat();
 
-System.out.println("Spedisco dato  " + timeUTC);
+//System.out.println("Spedisco dato  " + timeUTC);
 
 
 	        Event.setEventRaw("STREAMING", streamEvent.getBytes());
@@ -852,7 +852,8 @@ System.out.println("Spedisco dato  " + timeUTC);
 	boolean saveTree;
 	Data currData = null;
 	long currTime;
-	    int currSeverity;
+	int currSeverity;
+        long prevStreamTime = 0;
 	long prevTime = 0;
 	int ignFuture;
 	    int prevSeverity = -1;
@@ -909,7 +910,12 @@ System.out.println("Spedisco dato  " + timeUTC);
 	        prevTime = time;
 	        if(saveTree)
 	        {
-	            treeManager.streamRow(treeNodeName, data, time);
+                    long currStreamTime = java.lang.System.currentTimeMillis();
+		    if(currStreamTime > prevStreamTime + 100) //No more often than 10 Hz
+		    {
+	                treeManager.streamRow(treeNodeName, data, time);
+		        prevStreamTime = currStreamTime;
+                    }
 	            treeManager.putRow(treeNodeName, data, time, segmentSize);
 	        }
 			if(severity != prevSeverity)
