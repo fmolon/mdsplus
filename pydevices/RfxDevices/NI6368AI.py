@@ -287,6 +287,8 @@ class NI6368AI(Device):
             chanFd = []
             chanNid = []
             resNid = []
+	    coeffsNid = []
+	    gainDividers = []
             saveList = c_void_p(0)
 
 
@@ -305,8 +307,10 @@ class NI6368AI(Device):
                     chanNid.append( getattr(self.device, 'channel_%d_data_raw'%(self.chanMap[chan]+1)).getNid() )
                     #self.device.debugPrint("chanFd "+'channel_%d_data_raw'%(self.chanMap[chan]+1), chanFd[chan], " chanNid ", chanNid[chan]
                     resNid.append( getattr(self.device, 'channel_%d_res_raw'%(self.chanMap[chan]+1)).getNid() )
+		    coeffsNid.append(getattr(self.device, 'channel_%d_calib_param'%(self.chanMap[chan]+1)).getNid() )
                     gain = getattr(self.device, 'channel_%d_range'%(self.chanMap[chan]+1)).data()
                     gain_code = self.device.gainDict[gain]
+		    gainDividers.append(1.) #Gains nou used in calibration for 6368
                     status = NI6368AI.niInterfaceLib.getCalibrationParams(currFd, gain_code, coeff)
                     if( status < 0 ):
                         Data.execute('DevLogErr($1,$2)', self.device.getNid(), 'Cannot read calibration values for Channel %d. Default value assumed ( offset= 0.0, gain = range/32768'%(str(self.chanMap[chan])) )
@@ -354,6 +358,8 @@ class NI6368AI(Device):
             chanNid_c = (c_int * len(chanNid) )(*chanNid)
             chanFd_c = (c_int * len(chanFd) )(*chanFd)
             resNid_c = (c_int * len(resNid))(*resNid)
+            coeffsNid_c = (c_int * len(coeffsNid))(*coeffsNid)
+ 	    gainDividers_c = (c_float * len(gainDividers))(*gainDividers)
 
             trigCount = 0
 
@@ -373,7 +379,7 @@ class NI6368AI(Device):
 
 
             while not self.stopReq:
-                status = NI6368AI.niInterfaceLib.xseriesReadAndSaveAllChannels(c_int(len(self.chanMap)), chanFd_c, c_int(bufSize), c_int(segmentSize), c_int(sampleToSkip), c_int(numSamples), c_float( timeAt0 ), c_float(frequency), chanNid_c, self.device.clock_source.getNid(), self.treePtr, saveList, self.stopAcq,
+                status = NI6368AI.niInterfaceLib.xseriesReadAndSaveAllChannels(c_int(len(self.chanMap)), chanFd_c, c_int(bufSize), c_int(segmentSize), c_int(sampleToSkip), c_int(numSamples), c_float( timeAt0 ), c_float(frequency), chanNid_c, gainDividers_c, coeffsNid_c, self.device.clock_source.getNid(), self.treePtr, saveList, self.stopAcq,
 		c_int(self.device.getTree().shot), resNid_c)
    ##Check termination
                 trigCount += 1

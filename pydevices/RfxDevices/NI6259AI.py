@@ -137,6 +137,7 @@ class NI6259AI(Device):
     enableDict = {'ENABLED':True , 'DISABLED':False}
     gainDict = {'10V':c_byte(1), '5V':c_byte(2),'2V':c_byte(3), '1V':c_byte(4),'500mV':c_byte(5),'200mV':c_byte(6),'100mV':c_byte(7)}
     gainValueDict = {'10V':10., '5V':5.,'2V':2., '1V':1.,'500mV':0.5,'200mV':0.2,'100mV':0.1}
+    gainDividerDict = {'10V':1., '5V':1.,'2V':5., '1V':10.,'500mV':20.,'200mV':50.,'100mV':100.}
 
     polarityDict = {'UNIPOLAR':AI_POLARITY_UNIPOLAR, 'BIPOLAR':AI_POLARITY_BIPOLAR}
     diffChanMap = [0,1,2,3,4,5,6,7,16,17,18,19,20,21,22,23]
@@ -275,12 +276,13 @@ class NI6259AI(Device):
             chanFd = []
             chanNid = []
             resNid = []
+	    coeffsNid = []
 
             coeff_array = c_float*4
             coeff = coeff_array();
 
             #NI6259AI.niInterfaceLib.getStopAcqFlag(byref(self.stopAcq));
-
+	    gainDividers = []
             for chan in range(len(self.chanMap)):
                 try:
                     #self.device.debugPrint 'CHANNEL', self.chanMap[chan]+1
@@ -291,11 +293,11 @@ class NI6259AI(Device):
                     chanNid.append( getattr(self.device, 'channel_%d_data_raw'%(self.chanMap[chan]+1)).getNid() )
                     #self.device.debugPrint "chanFd "+'channel_%d_data'%(self.chanMap[chan]+1), chanFd[chan], " chanNid ", chanNid[chan]
                     resNid.append( getattr(self.device, 'channel_%d_res_raw'%(self.chanMap[chan]+1)).getNid() )
+		    coeffsNid.append(getattr(self.device, 'channel_%d_calib_param'%(self.chanMap[chan]+1)).getNid() ) 
 
                     gain = getattr(self.device, 'channel_%d_range'%(self.chanMap[chan]+1)).data()
                     gain_code = self.device.gainDict[gain]
-
-                    #time.sleep(0.600)
+		    gainDividers.append(self.device.gainDividerDict[gain])
                     n_coeff = c_int(0)
                     status = NI6259AI.niInterfaceLib.pxi6259_getCalibrationParams(currFd, gain_code, coeff, byref(n_coeff) )
 
@@ -356,13 +358,15 @@ class NI6259AI(Device):
             chanNid_c = (c_int * len(chanNid) )(*chanNid)
             chanFd_c = (c_int * len(chanFd) )(*chanFd)
             resNid_c = (c_int * len(resNid))(*resNid)
- 
+            coeffsNid_c = (c_int * len(coeffsNid))(*coeffsNid)
+ 	    gainDividers_c = (c_float * len(gainDividers))(*gainDividers)
+
             #timeAt0 = trigSource + startTime
             #self.device.debugPrint("PXI 6259 TIME AT0 ", numSamples)            
             timeAt0 = startTime
 
             while not self.stopReq:
-                status = NI6259AI.niInterfaceLib.pxi6259_readAndSaveAllChannels(c_int(len(self.chanMap)), chanFd_c, c_int(bufSize), c_int(segmentSize), c_int(sampleToSkip), c_int(numSamples), chanNid_c, self.device.clock_source.getNid(), c_float( timeAt0 ), c_float(period), self.treePtr, saveList, self.stopAcq, c_int(self.device.getTree().shot), resNid_c)
+                status = NI6259AI.niInterfaceLib.pxi6259_readAndSaveAllChannels(c_int(len(self.chanMap)), chanFd_c, c_int(bufSize), c_int(segmentSize), c_int(sampleToSkip), c_int(numSamples), chanNid_c, gainDividers_c, coeffsNid_c, self.device.clock_source.getNid(), c_float( timeAt0 ), c_float(period), self.treePtr, saveList, self.stopAcq, c_int(self.device.getTree().shot), resNid_c)
 
    ##Check termination
                 if ( numSamples > 0 or (transientRec and status == -1) ):
@@ -377,7 +381,7 @@ class NI6259AI(Device):
 
             for chan in range(len(self.chanMap)):
                 os.close(chanFd[chan])
-            self.device.debugPrint 'ASYNCH WORKER TERMINATED'
+            self.device.debugPrint('ASYNCH WORKER TERMINATED')
             NI6259AI.niInterfaceLib.stopSave(saveList)
             NI6259AI.niInterfaceLib.freeStopAcqFlag(self.stopAcq)
 

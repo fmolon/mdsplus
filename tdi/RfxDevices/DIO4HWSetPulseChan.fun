@@ -11,6 +11,8 @@ public fun DIO4HWSetPulseChan(in _nid, in _board_id, in _channel, in _trig_mode,
 	private _DIO4_TC_INT_DISABLE	=		0x00;
 	private _DIO4_TC_GATE_DISABLED = 0x00;
 	private _DIO4_TC_SINGLE_SHOT = 0;	
+	private _DIO4_TC_TERMINATE_PHASE_2 = 0x2;
+	private _DIO4_TC_IDLE_LEVEL_0 = 0x0;
 	private _DIO4_TC_CYCLIC = 0x1;
 	private _DIO4_TC_TIMING_EVENT= 0x03;
 	private _DIO4_TC_TRIGGER_DISABLED= 0x00;
@@ -105,6 +107,15 @@ write(*, 'event size: ', _s);
 
 		_mode = _mode | _DIO4_TC_IDLE_LEVEL_0;
 
+
+	if(_duration > 420)
+	{
+		write(*, 'continuous');
+		_mode = byte(_mode | _DIO4_TC_TERMINATE_PHASE_2);
+	}
+
+
+
 	_status = DIO4->DIO4_TC_SetPhaseSettings(val(_handle), val(byte(_channel + 1)), val(_mode), 
 		val(byte(_DIO4_TC_INT_DISABLE)), _levels);
 	if(_status != 0)
@@ -119,14 +130,33 @@ write(*, 'event size: ', _s);
 
 /* Timing setting */
 
-	_delay_cycles = long(_delay / 1E-7 + 0.5) - 2;
+/*
+	_delay_cycles = long_unsigned(_delay / 1E-7 + 0.5) - 2;
 	if( _delay_cycles < 0 ) _delay_cycles = 0;
+*/
+        _delay_cycles = 0;
+        if( _delay > 0 )
+	    _delay_cycles = long_unsigned(_delay * 10000000UL) - 1UL;
 
-	_duration_cycles = long(_duration / 1E-7 + 0.5) - 1;
+	write(*, '_delay_cycles', _delay, _delay_cycles);
+
+
+
+/*
+Molto strano perche fare una divisione invece di una motiplicazione
+	_duration_cycles = long_unsigned(_duration / 1E-7 + 0.5) - 1;
+*/
+	_duration_cycles = 0;
+        if( _duration > 0 )
+	    _duration_cycles = long_unsigned(_duration * 10000000UL) - 1UL;
+
+/*
+Molto strano comunque un unsigned long viene rilevato negativo
 	if( _duration_cycles < 0 ) _duration_cycles = 0;
-
+*/
 	_cycles = [long(0),long(0),long(0),long(0)]; 
 
+write(*,"------> DURATION CICLE ", _duration, _duration_cycles);
 
 	_status = DIO4->DIO4_TC_SetPhaseTiming(val(_handle), val(byte(_channel + 1)), _cycles, val(_delay_cycles), 
 		val(_duration_cycles)); 

@@ -54,17 +54,18 @@ extern "C" void xseries_free_ai_conf_ptr(void *conf);
 extern "C" int  _xseries_get_device_info(int fd, void *cardInfo);
 extern "C" int getErrno();
 extern "C" int xseries_set_ai_conf_ptr(int fd,  void *conf_ptr);
-extern "C" int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int segmentSize, int sampleToSkip, int numSamples, void *dataNidPtr, int clockNid, float timeIdx0, float period, void *treePtr, void *saveListPtr, void *stopAcq, int shot, void *resNitPtr);
+extern "C" int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int segmentSize, int sampleToSkip, int numSamples, void *dataNidPtr, 
+	void *gainsPtr, void *coeffsNidPtr, int clockNid, float timeIdx0, float period, void *treePtr, void *saveListPtr, void *stopAcq, int shot, void *resNitPtr);
 extern "C" int xseries_AI_scale(int16_t *raw, float *scaled, uint32_t num_samples, float * coeff);
 
 extern "C" void openTree(char *name, int shot, void **treePtr);
 extern "C" void closeTree(void *treePtr);
 extern "C" int readAndSave(int chanFd, int bufSize, int segmentSize, int counter, int dataNid, int clockNid, void *treePtr, void *saveList);
-//extern "C" int readAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int segmentSize, int numSamples, void *dataNidPtr, int clockNid, void *treePtr, void *saveListPtr, void *stopAcq);
 extern "C" void readAiConfiguration(int fd);
 
 
-extern "C" int pxi6259_readAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int segmentSize, int sampleToSkip, int numSamples, void *dataNidPtr, int clockNid, float timeIdx0, float period, void *treePtr, void *saveListPtr, void *stopAcq, int shot, void *resNitPtr);
+extern "C" int pxi6259_readAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int segmentSize, int sampleToSkip, int numSamples, void *dataNidPtr, 
+	void *gainsPtr, void *coeffsNidPtr, int clockNid, float timeIdx0, float period, void *treePtr, void *saveListPtr, void *stopAcq, int shot, void *resNitPtr);
 
 extern "C" void getStopAcqFlag(void **stopAcq);
 extern "C" void freeStopAcqFlag(void *stopAcq);
@@ -229,9 +230,14 @@ class SaveItem {
     TreeNode *clockNode;
     TreeNode *resampledNode;
     char *streamName;
+    float streamGain;
+    float streamOffset;
     int shot;
+    int gain;
+    int numCoeffs;
+    float *coeffs;
  public:
-    SaveItem(void *buffer, int bufSize, int sampleToRead, char dataType, int segmentSize, int counter, int dataNid, int clockNid, float timeIdx0, void *treePtr, int shot, int streamFactor, char *streamName, double period, int resampledNid = -1)
+    SaveItem(void *buffer, int bufSize, int sampleToRead, char dataType, int segmentSize, int counter, int dataNid, int clockNid, float timeIdx0, void *treePtr, int shot, int streamFactor, char *streamName, float streamGain, float streamOffset, double period, float gain, float *coeffs, int numCoeffs, int resampledNid = -1)
     {
 	this->buffer = buffer;
 	this->dataType = dataType;
@@ -247,7 +253,12 @@ class SaveItem {
 	this->shot = shot;
 	this->streamFactor = streamFactor;
 	this->streamName = streamName;
+ 	this->streamGain = streamGain;
+	this->streamOffset = streamOffset;
 	this->period = period;
+	this->gain = gain;
+	this->numCoeffs = numCoeffs;
+	this->coeffs = coeffs;
 	nxt = 0;
 	dataNode = new TreeNode(dataNid, (Tree *)treePtr);
 	clockNode = new TreeNode(clockNid, (Tree *)treePtr);
@@ -332,14 +343,24 @@ class SaveItem {
 		{
 		    if(sampleIdx * sampleInterval >= bufSize)
 		    break;
-		    float rawSample = (float)((dataType == SHORT)?((short *)buffer)[sampleIdx * sampleInterval]:((float *)buffer)[sampleIdx * sampleInterval]);
-		    Data *sampleData = new Float32(rawSample);
-		    Data *streamValD = executeWithArgs("NiConvertStream($1,$2)", (Tree *)treePtr, 2, nidData, sampleData);
-		    float sample = streamValD->getFloat(); 
-		    samples[actSamples] = sample;
-		    deleteData(sampleData);
-		    deleteData(streamValD);
-//		    times[actSamples] = period * (counter - bufSize + actSamples * sampleInterval) + timeIdx0;
+		    float sample = (float)((dataType == SHORT)?((short *)buffer)[sampleIdx * sampleInterval]:((float *)buffer)[sampleIdx * sampleInterval]);
+
+		    float scaled = coeffs[numCoeffs - 1];
+		    for(int c = numCoeffs - 2; c >= 0; c--)
+		    {
+		        scaled *= sample; 
+			scaled += coeffs[c];
+		    }
+		    scaled /= gain;
+
+		    scaled = scaled * streamGain + streamOffset;
+//		    Data *sampleData = new Float32(rawSample);
+//		    Data *streamValD = executeWithArgs("NiConvertStream($1,$2)", (Tree *)treePtr, 2, nidData, sampleData);
+//		    float sample = streamValD->getFloat(); 
+//		    samples[actSamples] = sample;
+		    samples[actSamples] = scaled;
+//		    deleteData(sampleData);
+//		    deleteData(streamValD);
 		    times[actSamples] = period * (counter + actSamples * sampleInterval) + timeIdx0;
 		    actSamples++; 
 		}
@@ -490,9 +511,10 @@ class SaveList
 		stopReq = false;
 		threadCreated = false;
     }
-    void addItem(void *buffer, int bufSize, int sampleToRead, char dataType, int segmentSize, int counter, int dataNid, int clockNid, float trigTime, void *treePtr, int shot, int streamFactor, char *streamName, double period, int resampledNid = -1)
+    void addItem(void *buffer, int bufSize, int sampleToRead, char dataType, int segmentSize, int counter, int dataNid, int clockNid, float trigTime, 
+	void *treePtr, int shot, int streamFactor, char *streamName, float streamGain, float streamOffset, double period, float gain, float *coeffs, int numCoeffs, int resampledNid = -1)
     {
-		SaveItem *newItem = new SaveItem(buffer, bufSize, sampleToRead, dataType, segmentSize, counter, dataNid, clockNid, trigTime, treePtr, shot, streamFactor, streamName, period, resampledNid);
+		SaveItem *newItem = new SaveItem(buffer, bufSize, sampleToRead, dataType, segmentSize, counter, dataNid, clockNid, trigTime, treePtr, shot, streamFactor, streamName, streamGain, streamOffset, period, gain, coeffs, numCoeffs, resampledNid);
 		pthread_mutex_lock(&mutex);
 		if(saveHead == NULL)
 			saveHead = saveTail = newItem;
@@ -786,8 +808,9 @@ Nuova versione 5.0 codac ma sembra non funzionare
 
 
 
-int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int segmentSize, int sampleToSkip, int numSamples, void *dataNidPtr, int clockNid, 
-				  float timeIdx0, float period, void *treePtr, void *saveListPtr, void *stopAcq, int shot, void *resampledNidPtr)
+int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int segmentSize, int sampleToSkip, int numSamples, void *dataNidPtr, 
+	void *gainsPtr, void *coeffsNidPtr,  int clockNid, 
+	float timeIdx0, float period, void *treePtr, void *saveListPtr, void *stopAcq, int shot, void *resampledNidPtr)
 { 
     char saveConv = 0; // Acquisition format flags 0 raw data 1 convrted dta
     int  skipping = 0; // Number of samples to not save when start time is > 0
@@ -799,15 +822,19 @@ int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int s
     int currReadSamples;    //Number of samples read
     SaveList *saveList = (SaveList *)saveListPtr; // Class to equeu data buffer to save in pulse file
     int *chanFd        = (int *)chanFdPtr;        // Channe file descriptor
-    int *dataNid       =  (int *)dataNidPtr;      // Channel node identifier
-    int *resampledNid       =  (int *)resampledNidPtr;      // Channel node identifier
+    int *dataNid       = (int *)dataNidPtr;      // Channel node identifier
+    float *gains      = (float *)gainsPtr; 
+    int *coeffsNid     = (int *)coeffsNidPtr; 
+    int *resampledNid  =  (int *)resampledNidPtr;      // Channel node identifier
    
 
     int             readCalls[nChan]; // For statistic number of read operation pe channel
     unsigned short* buffers_s[nChan]; // Raw data buffer used when not converted data are read
     float*          buffers_f[nChan]; // Converted data buffer uesed when converted dta are read
-    int             readChanSmp[nChan]; // Numebr of semples to read from each channel
+    int             readChanSmp[nChan]; // Numebr of samples to read from each channel
     int             bufReadChanSmp[nChan]; // Number of sample read in the buffer for each channel
+    float 	    streamGains[nChan]; 
+    float 	    streamOffsets[nChan]; 
     int             channelRead; // Number of channel completely read
 
     int triggered = 0;           // Module triggered flag
@@ -847,11 +874,32 @@ int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int s
     	    Data *streamNameData = dataNode->getExtendedAttribute("STREAM_NAME");
     	    streamNames[chan] = streamNameData->getString();
     	    deleteData(streamNameData);
-        }
-        catch(MdsException &exc) {streamNames[chan] = NULL;}
+	    try {
+		Data *streamGainData = dataNode->getExtendedAttribute("STREAM_GAIN");
+		streamGains[chan] = streamGainData->getFloat();
+	    }
+	    catch(MdsException &exc) {streamGains[chan] = 1;}
+ 	    try {
+		Data *streamOffsetData = dataNode->getExtendedAttribute("STREAM_OFFSET");
+		streamOffsets[chan] = streamOffsetData->getFloat();
+	    }
+	    catch(MdsException &exc) {streamOffsets[chan] = 0;}
+        }	
+        catch(MdsException &exc) {streamNames[chan] = NULL; streamGains[chan] = 0; streamOffsets[chan] = 0;}
 	delete(dataNode);
     }
     triggered = 0;	
+
+   //Read calibration coeffs
+    float *coeffs[nChan];
+    int numCoeffs[nChan];
+    for(int chanIdx = 0; chanIdx < nChan; chanIdx++)
+    {
+	TreeNode *rangeNode = new TreeNode(coeffsNid[chanIdx], (MDSplus::Tree *)treePtr);
+	coeffs[chanIdx] = rangeNode->getFloatArray(&numCoeffs[chanIdx]);
+    }
+    //////////////////
+
     // Start main acquisition loop
     while( !(*(int*)stopAcq) )
     {
@@ -907,8 +955,8 @@ int xseriesReadAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int s
 
             readCalls[chan]++;
 
-if( chan == 0 && (testCount % 1000000) == 0 )
-printf("[1] bufReadChanSmp[%d] = %d  currDataToRead %d Request data %d read data %d \n",chan, bufReadChanSmp[chan] , 	currDataToRead, currDataToRead - bufReadChanSmp[chan], currReadSamples >> 1);
+//if( chan == 0 && (testCount % 1000000) == 0 )
+//printf("[1] bufReadChanSmp[%d] = %d  currDataToRead %d Request data %d read data %d \n",chan, bufReadChanSmp[chan] , 	currDataToRead, currDataToRead - bufReadChanSmp[chan], currReadSamples >> 1);
 
             // Check if no data is available
             if(currReadSamples <=0)
@@ -945,8 +993,8 @@ printf("[1] bufReadChanSmp[%d] = %d  currDataToRead %d Request data %d read data
             else
                 bufReadChanSmp[chan] += ( currReadSamples >> 1 );                     
 
-if( chan == 0 && (testCount % 1000000) == 0 )            
-printf("[2] bufReadChanSmp[%d] = %d  currDataToRead %d \n",chan, bufReadChanSmp[chan] , currDataToRead);
+//if( chan == 0 && (testCount % 1000000) == 0 )            
+//printf("[2] bufReadChanSmp[%d] = %d  currDataToRead %d \n",chan, bufReadChanSmp[chan] , currDataToRead);
 
             //Enqueue data to store in the pulse file
             if( bufReadChanSmp[chan] == currDataToRead )
@@ -959,8 +1007,8 @@ printf("[2] bufReadChanSmp[%d] = %d  currDataToRead %d \n",chan, bufReadChanSmp[
                 sampleToRead = numSamples - readChanSmp[chan];
 
 
-if( chan == 0 && (testCount % 1000) == 0 )   
-printf("[>>>3] bufReadChanSmp[%d] = %d readChanSmp[%d] = %d readChanSmp[%d] = %d sampleToRead = %d\n", chan, bufReadChanSmp[chan], chan, readChanSmp[chan], chan, readChanSmp[chan], sampleToRead );
+//if( chan == 0 && (testCount % 1000) == 0 )   
+//printf("[>>>3] bufReadChanSmp[%d] = %d readChanSmp[%d] = %d readChanSmp[%d] = %d sampleToRead = %d\n", chan, bufReadChanSmp[chan], chan, readChanSmp[chan], chan, readChanSmp[chan], sampleToRead );
     	    
                 if(!skipping)
                 {
@@ -975,11 +1023,13 @@ printf("[>>>3] bufReadChanSmp[%d] = %d readChanSmp[%d] = %d readChanSmp[%d] = %d
 		    if(resampledNid)
 			saveList->addItem(((saveConv) ? (void *)buffers_f[chan] : (void *)buffers_s[chan] ), 
                                       bufReadChanSmp[chan], sampleToRead, ((saveConv) ? FLOAT  : SHORT ), segmentSize, 
-                                      readChanSmp[chan], dataNid[chan], clockNid, timeIdx0, treePtr, shot, streamFactor, streamNames[chan], period, resampledNid[chan]);
+                                      readChanSmp[chan], dataNid[chan], clockNid, timeIdx0, treePtr, shot, streamFactor, streamNames[chan],
+				      streamGains[chan], streamOffsets[chan], period, gains[chan], coeffs[chan], numCoeffs[chan], resampledNid[chan]);
 		    else
 			saveList->addItem(((saveConv) ? (void *)buffers_f[chan] : (void *)buffers_s[chan] ), 
                                       bufReadChanSmp[chan], sampleToRead, ((saveConv) ? FLOAT  : SHORT ), segmentSize, 
-                                      readChanSmp[chan], dataNid[chan], clockNid, timeIdx0, treePtr, shot, streamFactor, streamNames[chan], period);
+                                      readChanSmp[chan], dataNid[chan], clockNid, timeIdx0, treePtr, shot, streamFactor, streamNames[chan], 
+				      streamGains[chan], streamOffsets[chan], period, gains[chan], coeffs[chan], numCoeffs[chan]);
 
                    //allocate new buffer to save the next segment
                    if( saveConv )
@@ -1043,8 +1093,9 @@ printf("[>>>3] bufReadChanSmp[%d] = %d readChanSmp[%d] = %d readChanSmp[%d] = %d
 //=============================
 #define PXI6259_MAX_BUFSIZE_NEW 10000
 
-int pxi6259_readAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int segmentSize, int sampleToSkip, int numSamples, void *dataNidPtr, int clockNid, float timeIdx0, 
-				   float period, void *treePtr, void *saveListPtr, void *stopAcq, int shot, void *resampledNidPtr)
+int pxi6259_readAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int segmentSize, int sampleToSkip, int numSamples, void *dataNidPtr, 
+			void *gainsPtr, void *coeffsNidPtr, int clockNid, float timeIdx0, 
+			float period, void *treePtr, void *saveListPtr, void *stopAcq, int shot, void *resampledNidPtr)
 { 
     char saveConv = 0; // Acquisition format flags 0 raw data 1 convrted dta
     int  skipping  = 0;
@@ -1057,6 +1108,8 @@ int pxi6259_readAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int 
     SaveList *saveList  = (SaveList *)saveListPtr;
     int *chanFd 	= (int *)chanFdPtr;
     int *dataNid 	= (int *)dataNidPtr;
+    float *gains 	= (float *)gainsPtr;
+    int *coeffsNid 	= (int *)coeffsNidPtr;
     int *resampledNid 	= (int *)resampledNidPtr;
     bool transientRec 	= false;
 
@@ -1069,6 +1122,8 @@ int pxi6259_readAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int 
     int    	    channelRead;
     int 	    triggered = 0;
     char 	    *streamNames[nChan];
+    float streamGains[nChan];
+    float streamOffsets[nChan];
 
     if (bufSize > PXI6259_MAX_BUFSIZE_NEW)
         bufSize = PXI6259_MAX_BUFSIZE_NEW;
@@ -1086,12 +1141,22 @@ int pxi6259_readAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int 
             TreeNode *currNode = new TreeNode(dataNid[i], (Tree *)treePtr);
             currNode->deleteData();
 //Check if resampling
-	    try {
-	    	Data *streamNameData = currNode->getExtendedAttribute("STREAM_NAME");
-	    	streamNames[i] = streamNameData->getString();
-	    	deleteData(streamNameData);
-	    }
-	    catch(MdsException &exc) {streamNames[i] = NULL;}
+            try {
+    	        Data *streamNameData = currNode->getExtendedAttribute("STREAM_NAME");
+    	        streamNames[i] = streamNameData->getString();
+    	        deleteData(streamNameData);
+	        try {
+		    Data *streamGainData = currNode->getExtendedAttribute("STREAM_GAIN");
+		    streamGains[i] = streamGainData->getFloat();
+	        }
+	        catch(MdsException &exc) {streamGains[i] = 1;}
+ 	        try {
+		    Data *streamOffsetData = currNode->getExtendedAttribute("STREAM_OFFSET");
+		    streamOffsets[i] = streamOffsetData->getFloat();
+	        }
+	        catch(MdsException &exc) {streamOffsets[i] = 0;}
+            }	
+            catch(MdsException &exc) {streamNames[i] = NULL; streamGains[i] = 0; streamOffsets[i] = 0;}
             delete currNode;
 	    if(resampledNid)
 	    {
@@ -1103,10 +1168,6 @@ int pxi6259_readAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int 
         {
             printf("Error deleting data nodes\n");
         }
-
-
-
-
     }
 
     if( (*(int*)stopAcq) == 1)
@@ -1124,6 +1185,17 @@ int pxi6259_readAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int 
 
     triggered = 0;
 
+    //Read calibration coeffs
+    float *coeffs[nChan];
+    int numCoeffs[nChan];
+    for(int chanIdx = 0; chanIdx < nChan; chanIdx++)
+    {
+	TreeNode *rangeNode = new TreeNode(coeffsNid[chanIdx], (MDSplus::Tree *)treePtr);
+	coeffs[chanIdx] = rangeNode->getFloatArray(&numCoeffs[chanIdx]);
+    }
+
+
+    //////////////////
 
     while( !(*(int*)stopAcq) )
     {
@@ -1236,11 +1308,13 @@ int pxi6259_readAndSaveAllChannels(int nChan, void *chanFdPtr, int bufSize, int 
 		   if(resampledNid)
                    	saveList->addItem(((saveConv) ? (void *)buffers_f[chan] : (void *)buffers_s[chan] ), 
                                       bufReadChanSmp[chan], sampleToRead, ((saveConv) ? FLOAT  : SHORT ), segmentSize, 
-                                      readChanSmp[chan], dataNid[chan], clockNid, timeIdx0, treePtr, shot, streamFactor, streamNames[chan], period, resampledNid[chan]);
+                                      readChanSmp[chan], dataNid[chan], clockNid, timeIdx0, treePtr, shot, streamFactor, streamNames[chan], 
+				      streamGains[chan], streamOffsets[chan], period, gains[chan], coeffs[chan], numCoeffs[chan], resampledNid[chan]);
 		    else
                    	saveList->addItem(((saveConv) ? (void *)buffers_f[chan] : (void *)buffers_s[chan] ), 
                                       bufReadChanSmp[chan], sampleToRead, ((saveConv) ? FLOAT  : SHORT ), segmentSize, 
-                                      readChanSmp[chan], dataNid[chan], clockNid, timeIdx0, treePtr, shot, streamFactor, streamNames[chan], period);
+                                      readChanSmp[chan], dataNid[chan], clockNid, timeIdx0, treePtr, shot, streamFactor, streamNames[chan], 
+				      streamGains[chan], streamOffsets[chan], period, gains[chan], coeffs[chan], numCoeffs[chan]);
 
                    if( saveConv )
                         buffers_f[chan] = new float[bufSize];
